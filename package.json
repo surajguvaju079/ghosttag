@@ -1,0 +1,13 @@
+{
+  "name": "ghosttag",
+  "private": true,
+  "packageManager": "pnpm@11.6.0",
+  "scripts": {
+    "dev:api": "pnpm --filter @ghosttag/api start:dev",
+    "dev:mobile": "pnpm --filter @ghosttag/mobile start",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test"
+  }
+}

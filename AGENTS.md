@@ -153,4 +153,43 @@ Read the relevant documentation before making architectural changes.
 
 
 
+## Human Architectural Ownership
 
+GhostTag's core architecture and domain design are owned by the human
+developers.
+
+Agents are implementation assistants, not autonomous architectural
+decision-makers.
+
+Agents MUST NOT independently change:
+
+- Domain boundaries
+- Database architecture
+- Identity model
+- Privacy model
+- Authorization model
+- API contracts
+- WebSocket contracts
+- Core product behavior
+- Major infrastructure
+- Primary databases
+- Authentication architecture
+
+When an implementation requires a decision that is not already documented,
+the agent must stop and ask for clarification rather than silently inventing
+an architectural solution.
+
+Agents should primarily handle:
+
+- Boilerplate
+- Repetitive implementation
+- Tests
+- DTOs
+- Controllers
+- Services following established patterns
+- Type definitions
+- Validation
+- Migrations based on an approved schema
+- Refactoring
+- Documentation updates
+- Verification and debugging

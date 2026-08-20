@@ -11,3 +11,142 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum RoomVibe {
+  DEEP_TALK
+  CHAOS
+  RANT_ZONE
+  GAMER_LOBBY
+}
+
+enum RoomStatus {
+  ACTIVE
+  LOCKED
+  EXPIRED
+}
+
+enum ReactionType {
+  FIRE
+  LAUGH
+  SHOCK
+  MIND_BLOWN
+}
+
+enum PollOption {
+  A
+  B
+}
+
+model AnonymousUser {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  createdRooms Room[]           @relation("RoomCreator")
+  memberships  RoomMembership[]
+
+  @@map("anonymous_users")
+}
+
+model Room {
+  id        String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code      String     @unique @db.VarChar(7)
+  vibe      RoomVibe
+  name      String?    @db.VarChar(100)
+  creatorId String     @db.Uuid
+  status    RoomStatus @default(ACTIVE)
+  createdAt DateTime   @default(now()) @db.Timestamptz(6)
+  expiresAt DateTime   @db.Timestamptz(6)
+
+  creator     AnonymousUser    @relation("RoomCreator", fields: [creatorId], references: [id])
+  memberships RoomMembership[]
+  messages    Message[]
+  polls       Poll[]
+
+  @@index([status, expiresAt])
+  @@index([creatorId])
+  @@map("rooms")
+}
+
+model RoomMembership {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roomId      String   @db.Uuid
+  userId      String   @db.Uuid
+  ghostName   String   @db.VarChar(50)
+  ghostAvatar String   @db.VarChar(100)
+  joinedAt    DateTime @default(now()) @db.Timestamptz(6)
+
+  room      Room          @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user      AnonymousUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  Message[]
+  reactions Reaction[]
+  pollVotes PollVote[]
+
+  @@unique([userId, roomId])
+  @@index([userId])
+  @@index([roomId])
+  @@map("room_memberships")
+}
+
+model Message {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roomId       String   @db.Uuid
+  membershipId String   @db.Uuid
+  text         String   @db.VarChar(2000)
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+
+  room       Room           @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  membership RoomMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  reactions  Reaction[]
+
+  @@index([roomId, createdAt])
+  @@index([membershipId])
+  @@map("messages")
+}
+
+model Reaction {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  messageId    String       @db.Uuid
+  membershipId String       @db.Uuid
+  type         ReactionType
+  createdAt    DateTime     @default(now()) @db.Timestamptz(6)
+
+  message    Message        @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  membership RoomMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, membershipId, type])
+  @@index([messageId])
+  @@index([membershipId])
+  @@map("reactions")
+}
+
+model Poll {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roomId    String   @db.Uuid
+  question  String   @db.VarChar(500)
+  optionA   String   @db.VarChar(100)
+  optionB   String   @db.VarChar(100)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  expiresAt DateTime @db.Timestamptz
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  votes PollVote[]
+
+  @@index([roomId, expiresAt])
+  @@map("polls")
+}
+
+model PollVote {
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  pollId       String     @db.Uuid
+  membershipId String     @db.Uuid
+  option       PollOption
+  createdAt    DateTime   @default(now()) @db.Timestamptz(6)
+
+  poll       Poll           @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  membership RoomMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, membershipId])
+  @@index([pollId])
+  @@index([membershipId])
+  @@map("poll_votes")
+}

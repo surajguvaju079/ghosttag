@@ -7,6 +7,8 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
+  app.enableShutdownHooks();
   app.setGlobalPrefix('api/v1')
 
   app.useGlobalFilters(new HttpExceptionFilter())

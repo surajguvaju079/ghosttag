@@ -22,7 +22,6 @@ enum RoomVibe {
 
 enum RoomStatus {
   ACTIVE
-  LOCKED
   EXPIRED
 }
 
@@ -36,6 +35,16 @@ enum ReactionType {
 enum PollOption {
   A
   B
+}
+
+enum RoomMemberRole {
+  OWNER
+  MEMBER
+}
+
+enum RoomMembershipStatus {
+  ACTIVE
+  LEFT
 }
 
 model AnonymousUser {
@@ -62,14 +71,15 @@ model IdentityCredential {
 }
 
 model Room {
-  id        String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  code      String     @unique @db.VarChar(7)
-  vibe      RoomVibe
-  name      String?    @db.VarChar(100)
-  creatorId String     @db.Uuid
-  status    RoomStatus @default(ACTIVE)
-  createdAt DateTime   @default(now()) @db.Timestamptz(6)
-  expiresAt DateTime   @db.Timestamptz(6)
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String     @unique @db.VarChar(7)
+  vibe        RoomVibe
+  name        String?    @db.VarChar(100)
+  creatorId   String     @db.Uuid
+  status      RoomStatus @default(ACTIVE)
+  lockedUntil DateTime?  @db.Timestamptz(6)
+  createdAt   DateTime   @default(now()) @db.Timestamptz(6)
+  expiresAt   DateTime   @db.Timestamptz(6)
 
   creator     AnonymousUser    @relation("RoomCreator", fields: [creatorId], references: [id])
   memberships RoomMembership[]
@@ -82,12 +92,15 @@ model Room {
 }
 
 model RoomMembership {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  roomId      String   @db.Uuid
-  userId      String   @db.Uuid
-  ghostName   String   @db.VarChar(50)
-  ghostAvatar String   @db.VarChar(100)
-  joinedAt    DateTime @default(now()) @db.Timestamptz(6)
+  id          String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roomId      String               @db.Uuid
+  userId      String               @db.Uuid
+  ghostName   String               @db.VarChar(50)
+  ghostAvatar String               @db.VarChar(100)
+  role        RoomMemberRole       @default(MEMBER)
+  status      RoomMembershipStatus @default(ACTIVE)
+  leftAt      DateTime?            @db.Timestamptz(6)
+  joinedAt    DateTime             @default(now()) @db.Timestamptz(6)
 
   room      Room          @relation(fields: [roomId], references: [id], onDelete: Cascade)
   user      AnonymousUser @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -140,7 +153,7 @@ model Poll {
   optionA   String   @db.VarChar(100)
   optionB   String   @db.VarChar(100)
   createdAt DateTime @default(now()) @db.Timestamptz(6)
-  expiresAt DateTime @db.Timestamptz
+  expiresAt DateTime @db.Timestamptz(6)
   room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
 
   votes PollVote[]

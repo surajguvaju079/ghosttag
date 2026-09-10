@@ -1,4 +1,4 @@
-import { Injectable, InternalServerErrorException } from "@nestjs/common";
+import { ConflictException, GoneException, HttpException, Injectable, InternalServerErrorException, NotFoundException } from "@nestjs/common";
 import { CreateRoomDto } from "./dto/create-room.dto";
 import { PrismaService } from "src/database/prisma/prisma.service";
 import { randomInt } from "crypto";
@@ -74,6 +74,133 @@ export class RoomService {
       message: 'Unable to create room',
     })
 
+  }
+
+
+  async joinRoom(userId: string, code: string) {
+    const normalizedCode = code.trim().toUpperCase();
+
+    const room = await this.prisma.room.findUnique({
+      where: {
+        code: normalizedCode
+      }
+    })
+    if (!room) {
+      throw new NotFoundException({
+        code: 'ROOM_NOT_FOUND',
+        message: 'Room not found'
+      })
+    }
+
+    const now = new Date();
+    if (room.expiresAt <= now) {
+      throw new GoneException({
+        code: 'ROOM_EXPIRED',
+        message: 'This room has expired'
+      })
+    }
+
+    if (room.lockedUntil && room.lockedUntil > now) {
+      throw new HttpException({
+        code: 'ROOM_LOCKED',
+        message: 'This room is temporarily locked',
+      }, 423)
+    }
+
+    const memebership = await this.prisma.roomMembership.findUnique({
+      where: {
+        userId_roomId: {
+          userId,
+          roomId: room.id,
+        }
+      }
+    })
+    if (memebership?.status === 'ACTIVE') {
+      return {
+        room: {
+          code: room.code,
+          vibe: room.vibe,
+          name: room.name,
+          expiresAt: room.expiresAt,
+        },
+        memebership: {
+          ghostName: memebership.ghostName,
+          ghostAvatar: memebership.ghostAvatar,
+          role: memebership.role,
+        }
+      }
+    }
+
+
+    const activeMemberCount = await this.prisma.roomMembership.count({
+      where: {
+        roomId: room.id,
+        status: 'ACTIVE'
+      }
+    });
+
+    if (activeMemberCount >= 50) {
+      throw new ConflictException({
+        code: 'ROOM_FULL',
+        message: 'This room is full',
+      })
+    }
+
+
+    if (memebership?.status === 'LEFT') {
+      const reactivatedMembership = await this.prisma.roomMembership.update({
+        where: {
+          id: memebership.id,
+        },
+        data: {
+          status: 'ACTIVE',
+          leftAt: null
+        }
+      });
+      return {
+        room: {
+          code: room.code,
+          vibe: room.vibe,
+          name: room.name,
+          expiresAt: room.expiresAt,
+        },
+        memebership: {
+          ghostName: reactivatedMembership.ghostName,
+          ghostAvatar: reactivatedMembership.ghostAvatar,
+          role: reactivatedMembership.role,
+        }
+
+      }
+
+    }
+
+
+    const newMembership = await this.prisma.roomMembership.create({
+      data: {
+        roomId: room.id,
+        userId,
+        role: 'MEMBER',
+        status: 'ACTIVE',
+        ghostName: this.generateGhostName(),
+        ghostAvatar: this.generateGhostAvatar(),
+
+      }
+    })
+
+    return {
+      room: {
+        code: room.code,
+        vibe: room.vibe,
+        name: room.name,
+        expiresAt: room.expiresAt,
+      },
+      memebership: {
+        ghostName: newMembership.ghostName,
+        ghostAvatar: newMembership.ghostAvatar,
+        role: newMembership.role,
+      }
+
+    }
   }
 
   private generateRoomCode(): string {

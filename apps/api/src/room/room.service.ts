@@ -16,6 +16,7 @@ import type { Prisma, Room, RoomMembership } from 'generated/prisma/client';
 export class RoomService {
   private readonly roomLifetimeMs = 24 * 60 * 60 * 1000;
   private readonly roomCodeMaxAttempts = 10;
+  private readonly maxCapacity = 50;
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -92,7 +93,7 @@ export class RoomService {
         const activeMemberCount = await tx.roomMembership.count({
           where: { roomId: room.id, status: 'ACTIVE' },
         });
-        if (activeMemberCount >= 50) {
+        if (activeMemberCount >= this.maxCapacity) {
           throw new ConflictException({
             code: 'ROOM_FULL',
             message: 'This room is full',
@@ -146,13 +147,106 @@ export class RoomService {
     );
   }
 
-  private async lockAccessibleRoom(tx: Prisma.TransactionClient, code: string) {
+  async getRoom(userId: string, code: string) {
+    return this.readAsActiveMember(
+      userId,
+      code,
+      async (tx, room, membership) => {
+        const activeMemberCount = await tx.roomMembership.count({
+          where: { roomId: room.id, status: 'ACTIVE' },
+        });
+        return {
+          room: {
+            code: room.code,
+            vibe: room.vibe,
+            name: room.name,
+            createdAt: room.createdAt,
+            expiresAt: room.expiresAt,
+            activeMemberCount,
+            maxCapacity: this.maxCapacity,
+          },
+          membership: this.publicIdentity(membership),
+        };
+      },
+    );
+  }
+
+  async getMembers(userId: string, code: string) {
+    return this.readAsActiveMember(userId, code, async (tx, room) => {
+      const members = await tx.roomMembership.findMany({
+        where: { roomId: room.id, status: 'ACTIVE' },
+        orderBy: [{ joinedAt: 'asc' }, { id: 'asc' }],
+        select: {
+          ghostName: true,
+          ghostAvatar: true,
+          role: true,
+          joinedAt: true,
+        },
+      });
+      return { members, total: members.length, maxCapacity: this.maxCapacity };
+    });
+  }
+
+  async getMembership(userId: string, code: string) {
+    return this.readAsActiveMember(userId, code, (_tx, _room, membership) => ({
+      membership: {
+        ...this.publicIdentity(membership),
+        status: membership.status,
+        joinedAt: membership.joinedAt,
+        leftAt: membership.leftAt,
+      },
+    }));
+  }
+
+  private async readAsActiveMember<T>(
+    userId: string,
+    code: string,
+    read: (
+      tx: Prisma.TransactionClient,
+      room: Room,
+      membership: RoomMembership,
+    ) => T | Promise<T>,
+  ): Promise<T> {
+    return this.prisma.$transaction(
+      async (tx) => {
+        const room = await this.lockAccessibleRoom(tx, code, 'shared');
+        const membership = await tx.roomMembership.findUnique({
+          where: { userId_roomId: { userId, roomId: room.id } },
+        });
+        if (!membership) {
+          throw new ForbiddenException({
+            code: 'ROOM_MEMBERSHIP_REQUIRED',
+            message: 'Room membership is required',
+          });
+        }
+        if (membership.status !== 'ACTIVE') {
+          throw new ForbiddenException({
+            code: 'ROOM_MEMBERSHIP_INACTIVE',
+            message: 'Active room membership is required',
+          });
+        }
+        return read(tx, room, membership);
+      },
+      { isolationLevel: 'ReadCommitted' },
+    );
+  }
+
+  private async lockAccessibleRoom(
+    tx: Prisma.TransactionClient,
+    code: string,
+    lock: 'shared' | 'exclusive' = 'exclusive',
+  ) {
     const normalizedCode = code.trim().toUpperCase();
-    // All joins/leaves lock the same room before reading or changing membership.
-    // At READ COMMITTED, queries after the lock see the preceding holder's commit.
-    const [room] = await tx.$queryRaw<Room[]>`
-      SELECT * FROM "rooms" WHERE "code" = ${normalizedCode} FOR UPDATE
-    `;
+    // Shared read locks coexist and block the exclusive locks used by join/leave.
+    // At READ COMMITTED, queries after the lock see the preceding writer's commit.
+    const [room] =
+      lock === 'shared'
+        ? await tx.$queryRaw<Room[]>`
+          SELECT * FROM "rooms" WHERE "code" = ${normalizedCode} FOR SHARE
+        `
+        : await tx.$queryRaw<Room[]>`
+          SELECT * FROM "rooms" WHERE "code" = ${normalizedCode} FOR UPDATE
+        `;
     if (!room) {
       throw new NotFoundException({
         code: 'ROOM_NOT_FOUND',
@@ -187,11 +281,15 @@ export class RoomService {
         name: room.name,
         expiresAt: room.expiresAt,
       },
-      membership: {
-        ghostName: membership.ghostName,
-        ghostAvatar: membership.ghostAvatar,
-        role: membership.role,
-      },
+      membership: this.publicIdentity(membership),
+    };
+  }
+
+  private publicIdentity(membership: RoomMembership) {
+    return {
+      ghostName: membership.ghostName,
+      ghostAvatar: membership.ghostAvatar,
+      role: membership.role,
     };
   }
 
@@ -261,12 +359,36 @@ export class RoomService {
 
     const meta = error.meta;
 
-    if (typeof meta !== 'object' || meta === null || !('target' in meta)) {
-      return false;
+    if (typeof meta !== 'object' || meta === null) return false;
+    if ('target' in meta && Array.isArray(meta.target)) {
+      return meta.target.includes('code');
     }
 
-    const target = meta.target;
-
-    return Array.isArray(target) && target.includes('code');
+    // Prisma 7's pg adapter reports the constraint through driverAdapterError.
+    if (!('driverAdapterError' in meta)) return false;
+    const adapterError = meta.driverAdapterError;
+    if (
+      typeof adapterError !== 'object' ||
+      adapterError === null ||
+      !('cause' in adapterError)
+    )
+      return false;
+    const cause = adapterError.cause;
+    if (
+      typeof cause !== 'object' ||
+      cause === null ||
+      !('kind' in cause) ||
+      cause.kind !== 'UniqueConstraintViolation' ||
+      !('constraint' in cause)
+    )
+      return false;
+    const constraint = cause.constraint;
+    return (
+      typeof constraint === 'object' &&
+      constraint !== null &&
+      'fields' in constraint &&
+      Array.isArray(constraint.fields) &&
+      constraint.fields.includes('code')
+    );
   }
 }

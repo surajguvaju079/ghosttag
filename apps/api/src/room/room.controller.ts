@@ -1,6 +1,8 @@
 import {
   Body,
   Controller,
+  Get,
+  Header,
   HttpCode,
   Param,
   Post,
@@ -23,6 +25,33 @@ export class RoomController {
     @Body() dto: CreateRoomDto,
   ) {
     return this.roomService.createRoom(identity.id, dto);
+  }
+
+  @Get(':code')
+  @Header('Cache-Control', 'no-store')
+  getRoom(
+    @CurrentIdentity() identity: AuthenticatedIdentity,
+    @Param('code') code: string,
+  ) {
+    return this.roomService.getRoom(identity.id, code);
+  }
+
+  @Get(':code/members')
+  @Header('Cache-Control', 'no-store')
+  getMembers(
+    @CurrentIdentity() identity: AuthenticatedIdentity,
+    @Param('code') code: string,
+  ) {
+    return this.roomService.getMembers(identity.id, code);
+  }
+
+  @Get(':code/membership')
+  @Header('Cache-Control', 'no-store')
+  getMembership(
+    @CurrentIdentity() identity: AuthenticatedIdentity,
+    @Param('code') code: string,
+  ) {
+    return this.roomService.getMembership(identity.id, code);
   }
 
   @Post(':code/join')

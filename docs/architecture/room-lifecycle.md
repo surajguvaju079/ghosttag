@@ -330,3 +330,69 @@ that database during teardown. It never truncates or migrates the configured dat
 Unavailable PostgreSQL or insufficient privileges cause an explicit test failure.
 Tests exercise first joins and reactivations, repeated leaves, authentication, lifecycle
 errors, simultaneous same-identity requests, and competing joins for the final slot.
+
+
+## Authenticated room reads
+
+The read-only endpoints are:
+
+* `GET /api/v1/rooms/:code` — public room details, ACTIVE member count, capacity,
+  and the caller's room-scoped identity.
+* `GET /api/v1/rooms/:code/members` — all ACTIVE participants in that room.
+* `GET /api/v1/rooms/:code/membership` — the caller's ACTIVE membership and its
+  original `joinedAt` and nullable `leftAt` timestamps.
+
+The anonymous identity guard authenticates all three. The service shares one read
+path that normalizes the code, resolves an accessible room, and verifies the
+caller's `(userId, roomId)` membership. There is no client-supplied user selector.
+Checks follow the existing order: not found (404), expired (410), locked (423),
+then missing membership (`403 ROOM_MEMBERSHIP_REQUIRED`) or inactive membership
+(`403 ROOM_MEMBERSHIP_INACTIVE`). Reads never reactivate or alter a membership.
+An owner with a LEFT membership has the same read restrictions as any other LEFT
+member. Owners may rejoin through the existing join endpoint if capacity permits.
+
+### Consistency with join and leave
+
+Read operations use a short `READ COMMITTED` transaction and acquire `FOR SHARE`
+on the same room row that joins/leaves lock with `FOR UPDATE`. Multiple reads
+can proceed together. The shared lock blocks membership writers following this
+protocol until authorization and retrieval finish, preventing a leave from
+committing between membership verification and participant/count retrieval.
+A read waiting on a writer sees its committed membership changes before checking
+access. Room updates and deletion also conflict with the shared lock. Timestamp
+accessibility checks happen after acquiring the room lock as for join/leave.
+These operations issue no INSERT, UPDATE, or DELETE statements. A response describes
+the state observed during its transaction; later changes require another request.
+Future membership writers must continue locking the parent room first.
+
+### Participant scope, ordering, and privacy
+
+Participant queries filter by resolved room ID and ACTIVE status, and select only
+`ghostName`, `ghostAvatar`, `role`, and `joinedAt`. The order is original `joinedAt`
+ascending with membership ID ascending as a deterministic private tie-breaker.
+The response has no internal IDs, user creation times, global identity references,
+credential hashes, or credentials. Current-membership responses are explicitly
+projected to room-scoped fields. Successful GET responses set `Cache-Control: no-store`.
+
+Return the full list without pagination for the 50 ACTIVE-member limit. This avoids
+ID-bearing cursors and keeps the MVP contract simple. The API contract documents
+`members`, `total`, and `maxCapacity`; pagination needs review before capacity grows.
+Ghost names and avatars can repeat and are not identifiers across rooms. The API
+exposes no stable global join key; visible content, roles, and required timestamps
+may still allow contextual inference and are not a guarantee against all correlation.
+
+The legacy v1 create-room UUID is preserved for compatibility. Its deprecation and
+recommended versioned migration are documented in `docs/api/rooms.md`; this milestone
+does not change that response, the identity model, or the Prisma schema.
+
+
+### Room-code collision compatibility
+
+The expanded PostgreSQL tests exposed an existing create-room retry issue: Prisma 7's
+pg adapter can attach unique-constraint fields under
+`meta.driverAdapterError.cause.constraint.fields` instead of `meta.target`.
+Creation now recognizes the `code` unique constraint in either representation and
+retains the existing bounded transaction retry. Unrelated or unidentified constraint
+errors are propagated. A forced PostgreSQL collision test verifies the retry and
+unchanged legacy create response. This is an implementation compatibility fix;
+room code generation, lifetime, and the response contract remain unchanged.

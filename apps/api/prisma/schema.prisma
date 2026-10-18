@@ -92,6 +92,7 @@ model Room {
 }
 
 model RoomMembership {
+  publicId    String               @unique @default(dbgenerated("('p_'::text || replace((gen_random_uuid())::text, '-'::text, ''::text))")) @db.VarChar(34)
   id          String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   roomId      String               @db.Uuid
   userId      String               @db.Uuid
@@ -115,16 +116,20 @@ model RoomMembership {
 }
 
 model Message {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  roomId       String   @db.Uuid
-  membershipId String   @db.Uuid
-  text         String   @db.VarChar(2000)
-  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  publicId        String   @unique @default(dbgenerated("('m_'::text || replace((gen_random_uuid())::text, '-'::text, ''::text))")) @db.VarChar(34)
+  clientMessageId String?  @db.VarChar(36)
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roomId          String   @db.Uuid
+  membershipId    String   @db.Uuid
+  text            String   @db.VarChar(2000)
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
 
   room       Room           @relation(fields: [roomId], references: [id], onDelete: Cascade)
   membership RoomMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
   reactions  Reaction[]
 
+  @@unique([membershipId, clientMessageId])
+  @@index([roomId, createdAt, publicId])
   @@index([roomId, createdAt])
   @@index([membershipId])
   @@map("messages")

@@ -1,66 +1,21 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from "@nestjs/common";
-import { PrismaService } from "src/database/prisma/prisma.service";
-import { AuthenticatedRequest } from "./authenticated-request";
-import { createHash } from "node:crypto";
-
-
-
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import { AuthenticatedRequest } from './authenticated-request';
+import { IdentityCredentialService } from './identity-credential.service';
 
 @Injectable()
 export class AnonymousIdentityGuard implements CanActivate {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly credentials: IdentityCredentialService) {}
+
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
-    const token = this.extractBearerToken(request);
-    if (!token) {
-      throw new UnauthorizedException({
-        code: "AUTHENTICATION_REQUIRED",
-        message: "Anonymous identity credential is required."
-      })
-    }
-    const tokenHash = createHash('sha256').update(token).digest('hex');
-    const credential = await this.prisma.identityCredential.findUnique({
-      where: { tokenHash },
-      select: {
-        userId: true,
-        expiresAt: true,
-        revokedAt: true
-      }
-    })
-    if (!credential) {
-      throw new UnauthorizedException({
-        code: 'INVALID_IDENTITY_CREDENTIAL', message: 'Invalid anonymous identity credential'
-      })
-    }
-    if (credential.revokedAt) {
-      throw new UnauthorizedException({
-        code: 'IDENTITY_REVOKED',
-        message: 'Anonymous identity has been revoked.'
-      })
-    }
-    if (credential.expiresAt && credential.expiresAt <= new Date()) {
-      throw new UnauthorizedException({
-        code: 'IDENTITY_EXPIRED',
-        message: 'Anonymous identity credential has expired.'
-      })
-    }
-    request.identity = {
-      id: credential.userId
-    };
+    const [scheme, token, extra] =
+      request.headers.authorization?.split(' ') ?? [];
+    const hash = this.credentials.hashToken(
+      scheme === 'Bearer' && !extra ? token : undefined,
+    );
+    const credential = await this.credentials.verify(hash);
+    request.identity = { id: credential.userId };
+    request.credentialHash = hash;
     return true;
   }
-
-  private extractBearerToken(request: AuthenticatedRequest): string | null {
-    const authorization = request.headers.authorization;
-    if (!authorization) {
-      return null;
-    }
-
-    const [scheme, token] = authorization.split(' ');
-    if (scheme !== 'Bearer' || !token) {
-      return null;
-    }
-    return token;
-  }
-
 }

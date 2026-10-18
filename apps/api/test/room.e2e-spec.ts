@@ -1,3 +1,4 @@
+import { IdentityCredentialService } from '../src/common/auth/identity-credential.service';
 import { ConfigModule } from '@nestjs/config';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -55,6 +56,7 @@ describe('Room membership HTTP + PostgreSQL integration', () => {
         RoomService,
         IdentityService,
         AnonymousIdentityGuard,
+        IdentityCredentialService,
         { provide: PrismaService, useValue: prisma },
       ],
     }).compile();

@@ -204,3 +204,12 @@ Recommended migration, requiring an explicit contract change decision:
 4. Retire the old response only after the human owners approve the compatibility
    window and supported clients have migrated. Do not silently remove or repurpose
    `id` on v1.
+
+
+## Messaging
+
+Message history is documented in `docs/api/messages.md`; Socket.IO subscriptions and
+text sends are documented in `docs/websocket/messaging.md`. They require the same
+anonymous credential, accessible room, and ACTIVE membership. Public participant IDs
+are available in messaging subscription acknowledgements and message authors; no
+fields are added to existing room responses in this milestone.

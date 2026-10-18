@@ -251,6 +251,47 @@ describe('RoomService', () => {
     expect(tx.roomMembership.update).not.toHaveBeenCalled();
   });
 
+  it('notifies leave listeners after commit without exposing transport failures to REST', async () => {
+    let committed = false;
+    let observedAfterCommit = false;
+    prisma.$transaction.mockImplementationOnce(async (work) => {
+      const result = await work(tx);
+      committed = true;
+      return result;
+    });
+    tx.roomMembership.findUnique.mockResolvedValue(membership);
+    const listener = jest.fn(() => {
+      observedAfterCommit = committed;
+      throw new Error('Transport failure');
+    });
+    const remove = service.onLeave(listener);
+    try {
+      await expect(
+        service.leaveRoom(membership.userId, room.code),
+      ).resolves.toBeUndefined();
+      expect(observedAfterCommit).toBe(true);
+      expect(listener).toHaveBeenCalledWith({
+        userId: membership.userId,
+        code: room.code,
+      });
+    } finally {
+      remove();
+    }
+  });
+
+  it('does not notify subscribers when leave is rejected', async () => {
+    const listener = jest.fn();
+    const remove = service.onLeave(listener);
+    try {
+      await expect(
+        service.leaveRoom(membership.userId, room.code),
+      ).rejects.toBeDefined();
+      expect(listener).not.toHaveBeenCalled();
+    } finally {
+      remove();
+    }
+  });
+
   it('rejects leave for someone who never joined', async () => {
     await expect(
       service.leaveRoom(membership.userId, room.code),

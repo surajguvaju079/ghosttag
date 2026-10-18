@@ -17,6 +17,18 @@ export class RoomService {
   private readonly roomLifetimeMs = 24 * 60 * 60 * 1000;
   private readonly roomCodeMaxAttempts = 10;
   private readonly maxCapacity = 50;
+  private readonly leaveListeners = new Set<
+    (event: { userId: string; code: string }) => void
+  >();
+
+  onLeave(
+    listener: (event: { userId: string; code: string }) => void,
+  ): () => void {
+    this.leaveListeners.add(listener);
+    return () => {
+      this.leaveListeners.delete(listener);
+    };
+  }
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -123,7 +135,7 @@ export class RoomService {
   }
 
   async leaveRoom(userId: string, code: string): Promise<void> {
-    await this.prisma.$transaction(
+    const event = await this.prisma.$transaction(
       async (tx) => {
         const room = await this.lockAccessibleRoom(tx, code);
         const membership = await tx.roomMembership.findUnique({
@@ -136,15 +148,24 @@ export class RoomService {
           });
         }
         // Repeated leaves succeed without changing the original departure time.
-        if (membership.status === 'LEFT') return;
+        if (membership.status === 'LEFT') return { userId, code: room.code };
 
         await tx.roomMembership.update({
           where: { id: membership.id },
           data: { status: 'LEFT', leftAt: new Date() },
         });
+        return { userId, code: room.code };
       },
       { isolationLevel: 'ReadCommitted' },
     );
+    for (const listener of this.leaveListeners) {
+      try {
+        listener(event);
+      } catch {
+        // A transport failure cannot undo a committed leave. Per-delivery database
+        // authorization remains authoritative even if local invalidation failed.
+      }
+    }
   }
 
   async getRoom(userId: string, code: string) {
@@ -209,26 +230,40 @@ export class RoomService {
   ): Promise<T> {
     return this.prisma.$transaction(
       async (tx) => {
-        const room = await this.lockAccessibleRoom(tx, code, 'shared');
-        const membership = await tx.roomMembership.findUnique({
-          where: { userId_roomId: { userId, roomId: room.id } },
-        });
-        if (!membership) {
-          throw new ForbiddenException({
-            code: 'ROOM_MEMBERSHIP_REQUIRED',
-            message: 'Room membership is required',
-          });
-        }
-        if (membership.status !== 'ACTIVE') {
-          throw new ForbiddenException({
-            code: 'ROOM_MEMBERSHIP_INACTIVE',
-            message: 'Active room membership is required',
-          });
-        }
+        const { room, membership } = await this.authorizeActiveMember(
+          tx,
+          userId,
+          code,
+        );
         return read(tx, room, membership);
       },
       { isolationLevel: 'ReadCommitted' },
     );
+  }
+
+  async authorizeActiveMember(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    code: string,
+    lock: 'shared' | 'exclusive' = 'shared',
+  ) {
+    const room = await this.lockAccessibleRoom(tx, code, lock);
+    const membership = await tx.roomMembership.findUnique({
+      where: { userId_roomId: { userId, roomId: room.id } },
+    });
+    if (!membership) {
+      throw new ForbiddenException({
+        code: 'ROOM_MEMBERSHIP_REQUIRED',
+        message: 'Room membership is required',
+      });
+    }
+    if (membership.status !== 'ACTIVE') {
+      throw new ForbiddenException({
+        code: 'ROOM_MEMBERSHIP_INACTIVE',
+        message: 'Active room membership is required',
+      });
+    }
+    return { room, membership };
   }
 
   private async lockAccessibleRoom(
@@ -253,6 +288,11 @@ export class RoomService {
         message: 'Room not found',
       });
     }
+    this.assertAccessible(room);
+    return room;
+  }
+
+  assertAccessible(room: Room): void {
     // Check time after acquiring the lock: a room may expire while we wait.
     const now = new Date();
     if (room.expiresAt <= now) {
@@ -270,7 +310,6 @@ export class RoomService {
         423,
       );
     }
-    return room;
   }
 
   private joinResponse(room: Room, membership: RoomMembership) {

@@ -1,3 +1,4 @@
+import { MessageModule } from './message/message.module';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import configuration from './config/configuration';
@@ -10,12 +11,13 @@ import { RoomModule } from './room/room.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [configuration]
+      load: [configuration],
     }),
     PrismaModule,
     HealthModule,
     IdentityModule,
     RoomModule,
+    MessageModule,
   ],
 })
-export class AppModule { }
+export class AppModule {}

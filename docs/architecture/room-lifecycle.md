@@ -396,3 +396,13 @@ retains the existing bounded transaction retry. Unrelated or unidentified constr
 errors are propagated. A forced PostgreSQL collision test verifies the retry and
 unchanged legacy create response. This is an implementation compatibility fix;
 room code generation, lifetime, and the response contract remain unchanged.
+
+
+## Messaging integration
+
+Room-scoped message operations reuse `RoomService.authorizeActiveMember` and the
+same room locks. A committed leave notifies local subscribers after commit;
+notification does not delete or transfer the room. Messaging authorization also
+locks and rechecks credentials. See `docs/architecture/messaging.md` and
+`docs/websocket/messaging.md` for identifier, persistence, subscription, and
+per-delivery authorization decisions. Existing room REST payloads remain unchanged.

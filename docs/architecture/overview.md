@@ -752,3 +752,11 @@ Agent Instructions
 AGENTS.md
 
 These documents should be updated when the architecture changes.
+
+## Mobile MVP integration
+
+The Expo application integrates the existing anonymous identity, room, messaging
+and reporting contracts. See [mobile architecture](mobile.md) for credential
+storage, foreground/reconnect recovery and privacy decisions, and
+[mobile development](../../apps/mobile/README.md) for device-specific API URLs and
+verification boundaries. Backend contracts and the Prisma schema are unchanged.

@@ -1,19 +1,23 @@
-import { ConflictException, GoneException, HttpException, Injectable, InternalServerErrorException, NotFoundException } from "@nestjs/common";
-import { CreateRoomDto } from "./dto/create-room.dto";
-import { PrismaService } from "src/database/prisma/prisma.service";
-import { randomInt } from "crypto";
-
-
-
+import {
+  ConflictException,
+  ForbiddenException,
+  GoneException,
+  HttpException,
+  Injectable,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
+import { CreateRoomDto } from './dto/create-room.dto';
+import { PrismaService } from 'src/database/prisma/prisma.service';
+import { randomInt } from 'crypto';
+import type { Prisma, Room, RoomMembership } from 'generated/prisma/client';
 
 @Injectable()
 export class RoomService {
   private readonly roomLifetimeMs = 24 * 60 * 60 * 1000;
   private readonly roomCodeMaxAttempts = 10;
 
-  constructor(private readonly prisma: PrismaService) {
-
-  }
+  constructor(private readonly prisma: PrismaService) {}
 
   async createRoom(userId: string, dto: CreateRoomDto) {
     const now = new Date();
@@ -25,14 +29,15 @@ export class RoomService {
         return await this.prisma.$transaction(async (tx) => {
           const room = await tx.room.create({
             data: {
-              code, vibe: dto.vibe, name: dto.name?.trim() || null,
+              code,
+              vibe: dto.vibe,
+              name: dto.name?.trim() || null,
               creatorId: userId,
               status: 'ACTIVE',
               createdAt: now,
               expiresAt,
-            }
-          })
-
+            },
+          });
 
           const membership = await tx.roomMembership.create({
             data: {
@@ -43,8 +48,8 @@ export class RoomService {
               ghostName: this.generateGhostName(),
               ghostAvatar: this.generateGhostAvatar(),
               joinedAt: now,
-            }
-          })
+            },
+          });
 
           return {
             id: room.id,
@@ -55,138 +60,126 @@ export class RoomService {
             membership: {
               ghostName: membership.ghostName,
               ghostAvatar: membership.ghostAvatar,
-            }
-          }
-
-        })
-      }
-      catch (error) {
+            },
+          };
+        });
+      } catch (error) {
         if (this.isRoomCodeConflict(error)) {
           continue;
         }
         throw error;
       }
-
     }
 
     throw new InternalServerErrorException({
       code: 'ROOM_CODE_GENERATION_FAILED',
       message: 'Unable to create room',
-    })
-
+    });
   }
 
-
   async joinRoom(userId: string, code: string) {
-    const normalizedCode = code.trim().toUpperCase();
+    return this.prisma.$transaction(
+      async (tx) => {
+        const room = await this.lockAccessibleRoom(tx, code);
+        const membership = await tx.roomMembership.findUnique({
+          where: { userId_roomId: { userId, roomId: room.id } },
+        });
 
-    const room = await this.prisma.room.findUnique({
-      where: {
-        code: normalizedCode
-      }
-    })
+        if (membership?.status === 'ACTIVE') {
+          return this.joinResponse(room, membership);
+        }
+
+        const activeMemberCount = await tx.roomMembership.count({
+          where: { roomId: room.id, status: 'ACTIVE' },
+        });
+        if (activeMemberCount >= 50) {
+          throw new ConflictException({
+            code: 'ROOM_FULL',
+            message: 'This room is full',
+          });
+        }
+
+        const activeMembership = membership
+          ? await tx.roomMembership.update({
+              where: { id: membership.id },
+              data: { status: 'ACTIVE', leftAt: null },
+            })
+          : await tx.roomMembership.create({
+              data: {
+                roomId: room.id,
+                userId,
+                role: 'MEMBER',
+                status: 'ACTIVE',
+                ghostName: this.generateGhostName(),
+                ghostAvatar: this.generateGhostAvatar(),
+              },
+            });
+
+        return this.joinResponse(room, activeMembership);
+      },
+      { isolationLevel: 'ReadCommitted' },
+    );
+  }
+
+  async leaveRoom(userId: string, code: string): Promise<void> {
+    await this.prisma.$transaction(
+      async (tx) => {
+        const room = await this.lockAccessibleRoom(tx, code);
+        const membership = await tx.roomMembership.findUnique({
+          where: { userId_roomId: { userId, roomId: room.id } },
+        });
+        if (!membership) {
+          throw new ForbiddenException({
+            code: 'ROOM_MEMBERSHIP_REQUIRED',
+            message: 'Room membership is required',
+          });
+        }
+        // Repeated leaves succeed without changing the original departure time.
+        if (membership.status === 'LEFT') return;
+
+        await tx.roomMembership.update({
+          where: { id: membership.id },
+          data: { status: 'LEFT', leftAt: new Date() },
+        });
+      },
+      { isolationLevel: 'ReadCommitted' },
+    );
+  }
+
+  private async lockAccessibleRoom(tx: Prisma.TransactionClient, code: string) {
+    const normalizedCode = code.trim().toUpperCase();
+    // All joins/leaves lock the same room before reading or changing membership.
+    // At READ COMMITTED, queries after the lock see the preceding holder's commit.
+    const [room] = await tx.$queryRaw<Room[]>`
+      SELECT * FROM "rooms" WHERE "code" = ${normalizedCode} FOR UPDATE
+    `;
     if (!room) {
       throw new NotFoundException({
         code: 'ROOM_NOT_FOUND',
-        message: 'Room not found'
-      })
+        message: 'Room not found',
+      });
     }
-
+    // Check time after acquiring the lock: a room may expire while we wait.
     const now = new Date();
     if (room.expiresAt <= now) {
       throw new GoneException({
         code: 'ROOM_EXPIRED',
-        message: 'This room has expired'
-      })
-    }
-
-    if (room.lockedUntil && room.lockedUntil > now) {
-      throw new HttpException({
-        code: 'ROOM_LOCKED',
-        message: 'This room is temporarily locked',
-      }, 423)
-    }
-
-    const memebership = await this.prisma.roomMembership.findUnique({
-      where: {
-        userId_roomId: {
-          userId,
-          roomId: room.id,
-        }
-      }
-    })
-    if (memebership?.status === 'ACTIVE') {
-      return {
-        room: {
-          code: room.code,
-          vibe: room.vibe,
-          name: room.name,
-          expiresAt: room.expiresAt,
-        },
-        memebership: {
-          ghostName: memebership.ghostName,
-          ghostAvatar: memebership.ghostAvatar,
-          role: memebership.role,
-        }
-      }
-    }
-
-
-    const activeMemberCount = await this.prisma.roomMembership.count({
-      where: {
-        roomId: room.id,
-        status: 'ACTIVE'
-      }
-    });
-
-    if (activeMemberCount >= 50) {
-      throw new ConflictException({
-        code: 'ROOM_FULL',
-        message: 'This room is full',
-      })
-    }
-
-
-    if (memebership?.status === 'LEFT') {
-      const reactivatedMembership = await this.prisma.roomMembership.update({
-        where: {
-          id: memebership.id,
-        },
-        data: {
-          status: 'ACTIVE',
-          leftAt: null
-        }
+        message: 'This room has expired',
       });
-      return {
-        room: {
-          code: room.code,
-          vibe: room.vibe,
-          name: room.name,
-          expiresAt: room.expiresAt,
-        },
-        memebership: {
-          ghostName: reactivatedMembership.ghostName,
-          ghostAvatar: reactivatedMembership.ghostAvatar,
-          role: reactivatedMembership.role,
-        }
-
-      }
-
     }
+    if (room.lockedUntil && room.lockedUntil > now) {
+      throw new HttpException(
+        {
+          code: 'ROOM_LOCKED',
+          message: 'This room is temporarily locked',
+        },
+        423,
+      );
+    }
+    return room;
+  }
 
-
-    const newMembership = await this.prisma.roomMembership.create({
-      data: {
-        roomId: room.id,
-        userId,
-        role: 'MEMBER',
-        status: 'ACTIVE',
-        ghostName: this.generateGhostName(),
-        ghostAvatar: this.generateGhostAvatar(),
-
-      }
-    })
-
+  private joinResponse(room: Room, membership: RoomMembership) {
     return {
       room: {
         code: room.code,
@@ -194,13 +187,12 @@ export class RoomService {
         name: room.name,
         expiresAt: room.expiresAt,
       },
-      memebership: {
-        ghostName: newMembership.ghostName,
-        ghostAvatar: newMembership.ghostAvatar,
-        role: newMembership.role,
-      }
-
-    }
+      membership: {
+        ghostName: membership.ghostName,
+        ghostAvatar: membership.ghostAvatar,
+        role: membership.role,
+      },
+    };
   }
 
   private generateRoomCode(): string {
@@ -232,8 +224,7 @@ export class RoomService {
       'Echo',
     ];
 
-    const adjective =
-      adjectives[randomInt(0, adjectives.length)];
+    const adjective = adjectives[randomInt(0, adjectives.length)];
 
     const noun = nouns[randomInt(0, nouns.length)];
 
@@ -270,19 +261,12 @@ export class RoomService {
 
     const meta = error.meta;
 
-    if (
-      typeof meta !== 'object' ||
-      meta === null ||
-      !('target' in meta)
-    ) {
+    if (typeof meta !== 'object' || meta === null || !('target' in meta)) {
       return false;
     }
 
     const target = meta.target;
 
-    return (
-      Array.isArray(target) &&
-      target.includes('code')
-    );
+    return Array.isArray(target) && target.includes('code');
   }
 }

@@ -406,3 +406,15 @@ notification does not delete or transfer the room. Messaging authorization also
 locks and rechecks credentials. See `docs/architecture/messaging.md` and
 `docs/websocket/messaging.md` for identifier, persistence, subscription, and
 per-delivery authorization decisions. Existing room REST payloads remain unchanged.
+
+
+## Physical cleanup and safety controls
+
+The messaging safety milestone implements startup/periodic cleanup from persistent
+expiresAt timestamps, including expired rows whose status remains ACTIVE. It uses
+the same parent room lock, with SKIP LOCKED for concurrent workers, and removes
+bounded batches of content before memberships and the room itself. Logical expiry
+does not wait for the default one-hour physical-retention grace or a worker run.
+Authentication/membership access checks continue to precede content access. See
+`docs/architecture/messaging-safety.md` for report privacy, limits and cleanup order,
+and `docs/operations/messaging-safety.md` for configuration and recovery.

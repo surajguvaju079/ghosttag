@@ -1,3 +1,4 @@
+import { RetentionRunner } from '../src/retention/retention.runner';
 import type { Server } from 'node:http';
 import { ConfigModule } from '@nestjs/config';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
@@ -104,6 +105,8 @@ describe('Real-time messaging + PostgreSQL', () => {
       adapter: new PrismaPg({ connectionString: testUrl.toString() }),
     });
     const fixture = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(RetentionRunner)
+      .useValue({})
       .overrideProvider(PrismaService)
       .useValue(prisma)
       .compile();

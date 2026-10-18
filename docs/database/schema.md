@@ -275,8 +275,10 @@ Users may delete their own messages.
 
 Deleted messages must disappear from the user-facing conversation.
 
-The exact moderation/audit retention behavior will be defined in the
-moderation and privacy design.
+Basic message report retention is now defined in
+`docs/architecture/messaging-safety.md`. Reports are private metadata without
+content copies and cascade with the reported message or reporter membership.
+Longer-lived moderation evidence would require a separate privacy decision.
 
 Lifetime
 
@@ -286,8 +288,10 @@ Initially:
 
 message visibility ends with room expiration
 
-The exact backend purge/retention policy is intentionally not defined in
-this document yet.
+Physical cleanup now uses a default one-hour grace after room expiration,
+with bounded startup/periodic sweeps. See
+`docs/operations/messaging-safety.md` for configuration and recovery.
+Message visibility still ends immediately at room expiration.
 
 6. Reaction
 
@@ -509,8 +513,7 @@ authoritative database for these entities.
 
 The following domains are intentionally excluded from Phase 1:
 
-Moderation
-Reports
+Advanced moderation (basic message reporting is now implemented)
 Blocks
 Screenshot alerts
 Rate-limit records
@@ -532,3 +535,19 @@ Prisma must not be used to independently decide GhostTag's domain model.
 
 Any change to the foundational domain model must first be reflected in this
 document and reviewed before changing the Prisma schema.
+
+
+## Message reporting and cleanup addendum
+
+The messaging safety milestone adds `MessageReport` with internal `id`, `messageId`,
+`reporterMembershipId`, a fixed `reason`, and `createdAt`. The unique
+`(messageId, reporterMembershipId)` constraint deduplicates concurrent submissions.
+Both foreign keys cascade on deletion. There is no message copy, IP, token or public
+reporter identifier. External requests reference the public message ID; clients
+receive only `{accepted:true}`. No report-list or moderator API is introduced.
+
+A room `expiresAt/id` index supports timestamp-driven cleanup of expired ACTIVE or
+EXPIRED rows. Messages and polls are removed in bounded parent batches before
+memberships and the room; dependent reactions, votes and reports cascade. Identities
+and credentials are preserved. See `docs/architecture/messaging-safety.md` for the
+implementation decisions authorized by this milestone.

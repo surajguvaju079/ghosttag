@@ -1,3 +1,5 @@
+import { ConfigService } from '@nestjs/config';
+import { RateLimitService } from '../safety/rate-limit.service';
 import { ForbiddenException } from '@nestjs/common';
 import type { Socket } from 'socket.io';
 import { IdentityCredentialService } from 'src/common/auth/identity-credential.service';
@@ -30,6 +32,15 @@ describe('MessageGateway delivery authorization', () => {
         action: (value: MessageAccess) => unknown,
       ) => Promise.resolve(action(access)),
     ),
+    delivery: jest.fn(
+      (
+        hash: string,
+        code: string,
+        _id: string,
+        action: (value: MessageAccess, valueMessage: typeof message) => unknown,
+      ): Promise<unknown> =>
+        messages.access(hash, code, (value) => action(value, message)),
+    ),
     assertLive: jest.fn(),
     send: jest.fn(),
   };
@@ -40,6 +51,7 @@ describe('MessageGateway delivery authorization', () => {
     messages as unknown as MessageService,
     credentials as unknown as IdentityCredentialService,
     {} as RoomService,
+    new RateLimitService(new ConfigService()),
   );
   function socket(id: string) {
     return {
@@ -101,9 +113,10 @@ describe('MessageGateway delivery authorization', () => {
       'message:created',
       message,
     );
-    expect(messages.access).toHaveBeenLastCalledWith(
+    expect(messages.delivery).toHaveBeenLastCalledWith(
       'receiver',
       message.code,
+      message.messageId,
       expect.any(Function),
     );
   });
@@ -162,6 +175,27 @@ describe('MessageGateway delivery authorization', () => {
       'room:invalidated',
       expect.objectContaining({ code: message.code }),
     );
+  });
+
+  it('rejects an old subscription when a public code resolves to a replacement room', async () => {
+    await gateway.subscribe(receiver as unknown as Socket, {
+      code: message.code,
+    });
+    const oldRoom = access.room.id;
+    const oldMember = access.membership.id;
+    access.room.id = 'replacement-room';
+    access.membership.id = 'replacement-membership';
+    try {
+      await gateway.send(sender as unknown as Socket, {});
+      expect(receiver.volatile.emit).not.toHaveBeenCalled();
+      expect(receiver.emit).toHaveBeenCalledWith(
+        'room:invalidated',
+        expect.objectContaining({ code: message.code }),
+      );
+    } finally {
+      access.room.id = oldRoom;
+      access.membership.id = oldMember;
+    }
   });
 
   it('sanitizes unexpected errors', () => {

@@ -1,5 +1,11 @@
-import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus } from "@nestjs/common";
-import { Request, Response } from 'express'
+import {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
+import { Request, Response } from 'express';
 interface ErrorResponse {
   statusCode: number;
   code: string;
@@ -8,19 +14,22 @@ interface ErrorResponse {
   timestamp: string;
   details?: unknown;
   requestId: string;
+  retryAfterMs?: number;
 }
-
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
-
   catch(exception: unknown, host: ArgumentsHost): void {
     const context = host.switchToHttp();
     const response = context.getResponse<Response>();
     const request = context.getRequest<Request>();
 
-    const status = exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
-    const exceptionResponse = exception instanceof HttpException ? exception.getResponse() : undefined;
+    const status =
+      exception instanceof HttpException
+        ? exception.getStatus()
+        : HttpStatus.INTERNAL_SERVER_ERROR;
+    const exceptionResponse =
+      exception instanceof HttpException ? exception.getResponse() : undefined;
 
     const message = this.getMessage(exceptionResponse);
     const code = this.getCode(status, exceptionResponse);
@@ -31,12 +40,23 @@ export class HttpExceptionFilter implements ExceptionFilter {
       message,
       path: request.url,
       timestamp: new Date().toISOString(),
-      requestId
+      requestId,
+    };
+    if (
+      status === 429 &&
+      exceptionResponse &&
+      typeof exceptionResponse === 'object' &&
+      'retryAfterMs' in exceptionResponse &&
+      typeof exceptionResponse.retryAfterMs === 'number'
+    ) {
+      errorResponse.retryAfterMs = exceptionResponse.retryAfterMs;
+      response.setHeader(
+        'Retry-After',
+        Math.ceil(exceptionResponse.retryAfterMs / 1000).toString(),
+      );
     }
-    response.status(status).json(errorResponse)
-
+    response.status(status).json(errorResponse);
   }
-
 
   private getMessage(exceptionResponse: unknown): string {
     if (typeof exceptionResponse === 'string') {
@@ -62,12 +82,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     return 'Internal server error';
   }
 
-
-
-  private getCode(
-    status: number,
-    exceptionResponse: unknown,
-  ): string {
+  private getCode(status: HttpStatus, exceptionResponse: unknown): string {
     if (
       exceptionResponse &&
       typeof exceptionResponse === 'object' &&
@@ -101,13 +116,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
       return 'RATE_LIMITED';
     }
 
-
-    if (status >= 500) {
+    if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {
       return 'INTERNAL_SERVER_ERROR';
     }
 
     return 'REQUEST_ERROR';
   }
-
-
 }

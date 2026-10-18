@@ -1,3 +1,6 @@
+import { ConfigService } from '@nestjs/config';
+import { RateLimitService } from '../src/safety/rate-limit.service';
+import { RateLimitGuard } from '../src/safety/rate-limit.guard';
 import { IdentityCredentialService } from '../src/common/auth/identity-credential.service';
 import { ConfigModule } from '@nestjs/config';
 import { execFileSync } from 'node:child_process';
@@ -54,6 +57,13 @@ describe('Room membership HTTP + PostgreSQL integration', () => {
       controllers: [RoomController],
       providers: [
         RoomService,
+        RateLimitGuard,
+        {
+          provide: RateLimitService,
+          useValue: new RateLimitService(
+            new ConfigService({ SAFETY_ROOM_CREATE_NETWORK_LIMIT: 10000 }),
+          ),
+        },
         IdentityService,
         AnonymousIdentityGuard,
         IdentityCredentialService,

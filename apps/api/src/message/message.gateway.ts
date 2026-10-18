@@ -1,4 +1,9 @@
-import { HttpException, OnModuleDestroy } from '@nestjs/common';
+import { RateLimitService } from 'src/safety/rate-limit.service';
+import {
+  ForbiddenException,
+  HttpException,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import {
   ConnectedSocket,
   MessageBody,
@@ -11,14 +16,20 @@ import {
 import { Namespace, Socket } from 'socket.io';
 import { IdentityCredentialService } from 'src/common/auth/identity-credential.service';
 import { RoomService } from 'src/room/room.service';
-import { MessageService } from './message.service';
+import { MessageAccess, MessageService } from './message.service';
 import { payload, roomCode } from './message.validation';
 
+interface Subscription {
+  generation: symbol;
+  roomId: string;
+  membershipId: string;
+}
 interface ConnectionState {
   socket: Socket;
   hash: string;
   userId: string;
-  rooms: Map<string, symbol>;
+  network: string;
+  rooms: Map<string, Subscription>;
   versions: Map<string, symbol>;
 }
 
@@ -36,6 +47,10 @@ export function publicSocketError(error: unknown) {
         statusCode: error.getStatus(),
         code: response.code,
         message: response.message,
+        ...('retryAfterMs' in response &&
+        typeof response.retryAfterMs === 'number'
+          ? { retryAfterMs: response.retryAfterMs }
+          : {}),
       };
     }
   }
@@ -68,6 +83,7 @@ export class MessageGateway
     private readonly messages: MessageService,
     private readonly credentials: IdentityCredentialService,
     private readonly rooms: RoomService,
+    private readonly rates: RateLimitService,
   ) {}
 
   afterInit(server: Namespace) {
@@ -87,9 +103,12 @@ export class MessageGateway
     server.use((socket, next) => {
       void (async () => {
         try {
+          const network = socket.request.socket.remoteAddress ?? 'unknown';
+          this.rates.consume('WS_CONNECT', undefined, network);
           const hash = this.credentials.hashToken(socket.handshake.auth.token);
           socket.handshake.auth = {};
           const credential = await this.credentials.verify(hash);
+          this.rates.consume('WS_CONNECT', credential.userId);
           socket.data = { credentialHash: hash, userId: credential.userId };
           next();
         } catch (error) {
@@ -113,6 +132,7 @@ export class MessageGateway
       socket,
       hash: data.credentialHash,
       userId: data.userId,
+      network: socket.request?.socket.remoteAddress ?? 'unknown',
       rooms: new Map(),
       versions: new Map(),
     });
@@ -132,6 +152,7 @@ export class MessageGateway
   @SubscribeMessage('room:subscribe')
   subscribe(@ConnectedSocket() socket: Socket, @MessageBody() value: unknown) {
     return this.run(socket, async (state) => {
+      this.rates.consume('WS_SUBSCRIBE', state.userId, state.network);
       const code = roomCode(payload(value, ['code']).code);
       const version = Symbol();
       const previous = state.rooms.get(code);
@@ -142,7 +163,12 @@ export class MessageGateway
           this.messages.assertLive(access);
           const subscribed =
             socket.connected && state.versions.get(code) === version;
-          if (subscribed) state.rooms.set(code, version);
+          if (subscribed)
+            state.rooms.set(code, {
+              generation: version,
+              roomId: access.room.id,
+              membershipId: access.membership.id,
+            });
           return {
             code,
             subscribed,
@@ -190,6 +216,7 @@ export class MessageGateway
   @SubscribeMessage('message:send')
   send(@ConnectedSocket() socket: Socket, @MessageBody() value: unknown) {
     return this.run(socket, async (state) => {
+      this.rates.consume('MESSAGE_SEND', state.userId, state.network);
       const result = await this.messages.send(state.hash, value);
       if (!result.replayed) await this.deliver(result.message);
       return result;
@@ -227,17 +254,23 @@ export class MessageGateway
         const version = state.rooms.get(message.code);
         if (!version) return;
         try {
-          await this.messages.access(state.hash, message.code, (access) => {
-            if (
-              this.stopped ||
-              !state.socket.connected ||
-              state.rooms.get(message.code) !== version
-            )
-              return;
-            this.messages.assertLive(access);
-            // Enqueue under the credential and room locks; never use unchecked room broadcasts.
-            state.socket.volatile.emit('message:created', message);
-          });
+          await this.messages.delivery(
+            state.hash,
+            message.code,
+            message.messageId,
+            (access, persisted) => {
+              if (
+                this.stopped ||
+                !state.socket.connected ||
+                state.rooms.get(message.code) !== version
+              )
+                return;
+              this.assertSubscription(access, version);
+              this.messages.assertLive(access);
+              // Enqueue under the credential and room locks; never use unchecked room broadcasts.
+              state.socket.volatile.emit('message:created', persisted);
+            },
+          );
         } catch (error) {
           this.invalidate(
             state,
@@ -264,7 +297,9 @@ export class MessageGateway
           }
           for (const [code, version] of [...state.rooms]) {
             try {
-              await this.messages.access(state.hash, code, () => undefined);
+              await this.messages.access(state.hash, code, (access) =>
+                this.assertSubscription(access, version),
+              );
             } catch (error) {
               this.invalidate(state, code, version, publicSocketError(error));
             }
@@ -273,6 +308,21 @@ export class MessageGateway
       );
     } finally {
       this.sweeping = false;
+    }
+  }
+
+  private assertSubscription(
+    access: MessageAccess,
+    subscription: Subscription,
+  ) {
+    if (
+      access.room.id !== subscription.roomId ||
+      access.membership.id !== subscription.membershipId
+    ) {
+      throw new ForbiddenException({
+        code: 'ROOM_MEMBERSHIP_INACTIVE',
+        message: 'Subscribe again to this room',
+      });
     }
   }
 
@@ -291,7 +341,7 @@ export class MessageGateway
   private invalidate(
     state: ConnectionState,
     code: string,
-    version: symbol,
+    version: Subscription,
     error: ReturnType<typeof publicSocketError>,
   ) {
     if (error.statusCode === 401) {

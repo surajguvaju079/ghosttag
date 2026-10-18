@@ -1,3 +1,4 @@
+import { RateLimit } from 'src/safety/rate-limit.guard';
 import {
   Body,
   Controller,
@@ -20,6 +21,7 @@ export class RoomController {
   constructor(private readonly roomService: RoomService) {}
 
   @Post()
+  @RateLimit('ROOM_CREATE')
   async createRoom(
     @CurrentIdentity() identity: AuthenticatedIdentity,
     @Body() dto: CreateRoomDto,
@@ -55,6 +57,7 @@ export class RoomController {
   }
 
   @Post(':code/join')
+  @RateLimit('ROOM_JOIN')
   @HttpCode(200)
   joinRoom(
     @CurrentIdentity() identity: AuthenticatedIdentity,

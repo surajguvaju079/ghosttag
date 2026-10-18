@@ -187,3 +187,26 @@ cursors as needed. There is no since-cursor, durable replay stream, delivery rec
 or exactly-once fanout guarantee. The same retry key returns the same stored message
 after reconnect. This milestone supports one live API instance; see
 `docs/architecture/messaging.md` for the scaling and delivery limitations.
+
+
+## Safety limits and retention
+
+Connection attempts, subscriptions and send attempts now have process-local network
+and identity quotas. Reconnects share identity/network counters. New messages also
+have a tighter frequency limit; identical retries do not spend that frequency
+budget, but still count as send attempts. Rejections preserve the acknowledgement
+shape with `error: {statusCode:429, code:"RATE_LIMITED", message:"Too many requests",
+retryAfterMs:<milliseconds>}`. Connection-limit errors use the same fields in
+connect_error.data. Wait before retrying; a 429 does not disconnect a valid session.
+Unsubscribe remains available for cleanup even after subscription quota exhaustion.
+
+Subscriptions now also bind the actual room and membership internally, protecting
+against public code reuse after physical deletion. Each delivery re-resolves the
+persisted public message ID within that authorized room before emitting; deleted
+cached content cannot cross into a replacement room. No public payload fields change.
+
+Expired content is inaccessible immediately and is physically cleaned after a
+default one-hour grace, using bounded startup/periodic sweeps. Reporting is REST-only
+and emits no report or reporter events. See docs/architecture/messaging-safety.md,
+docs/api/message-reports.md and docs/operations/messaging-safety.md for policies,
+configuration, access boundaries and deployment limitations.

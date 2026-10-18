@@ -56,8 +56,9 @@ Acknowledgement/push delivery is best effort after commit. Disconnects, crashes 
 network loss can miss live events; retry the same clientMessageId and fetch history.
 Reconnect reauthenticates and starts with no subscriptions; explicitly resubscribe.
 There is no claim of durable fanout, exactly-once delivery, or replay of missed pushes.
-Clients deduplicate by messageId. Moderation, rate limits, retention workers, and
-multi-instance delivery are separate milestones; this is not production abuse hardening.
+Clients deduplicate by messageId. Configurable rate limits, private reports and
+retention workers are now documented in docs/architecture/messaging-safety.md.
+Multi-instance delivery and advanced moderation remain separate milestones.
 
 
 ## Local leave invalidation
@@ -84,3 +85,13 @@ data is not migrated as a side effect of running the tests.
 Verification: API `test --runInBand`, `test:e2e --runInBand`, `exec tsc --noEmit`,
 `build`, and targeted ESLint. Integration tests start real Socket.IO clients and
 HTTP endpoints against a migrated temporary database and remove it on teardown.
+
+
+## Retention-safe delivery
+
+Subscriptions retain the internal room and membership identity along with their
+connection generation. A recycled public room code cannot silently reuse that
+binding. Each push re-resolves the persisted public message ID within the authorized
+room; a message deleted before enqueue is not emitted from an in-memory cached
+payload. Existing per-recipient credential/room locks remain held during enqueue.
+No public room/message response fields change.

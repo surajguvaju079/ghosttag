@@ -59,3 +59,17 @@ See `docs/websocket/messaging.md` for send/retry, event, and reconnection contra
 Existing create/join/leave/room-read endpoints retain their response shapes. The new
 public participant ID is exposed through subscription acknowledgements and message
 authors; this milestone does not add fields to the existing REST participant list.
+
+
+## Safety and retention
+
+Sending is throttled through Socket.IO; a new-message frequency limit supplements
+attempt limits while preserving idempotent retries. Invalid/blank text and the
+2,000 UTF-16-unit maximum remain enforced. Abuse reports use
+`POST /api/v1/rooms/:code/messages/:messageId/reports`, documented in
+`docs/api/message-reports.md`. No reporter data is included in message history.
+
+Expiration denies history immediately. After the default one-hour grace, bounded
+cleanup physically deletes expired content and ultimately its room. A purged room
+returns 404 rather than 410; grace and backlog never grant continued access.
+Operational settings are documented in `docs/operations/messaging-safety.md`.

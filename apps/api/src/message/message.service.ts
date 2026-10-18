@@ -1,3 +1,4 @@
+import { RateLimitService } from 'src/safety/rate-limit.service';
 import { ConflictException, Injectable } from '@nestjs/common';
 import type { Prisma, Room, RoomMembership } from 'generated/prisma/client';
 import {
@@ -26,6 +27,7 @@ export class MessageService {
     private readonly credentials: IdentityCredentialService,
     private readonly rooms: RoomService,
     private readonly repository: MessageRepository,
+    private readonly rates: RateLimitService,
   ) {}
 
   access<T>(
@@ -74,6 +76,7 @@ export class MessageService {
           });
         }
         this.assertLive({ room, credential });
+        if (!previous) this.rates.consume('MESSAGE_BURST', credential.userId);
         const stored =
           previous ??
           (await this.repository.create(
@@ -92,6 +95,29 @@ export class MessageService {
       },
       true,
     );
+  }
+
+  delivery<T>(
+    hash: string,
+    code: string,
+    messageId: string,
+    action: (
+      access: MessageAccess,
+      message: ReturnType<MessageService['publicMessage']>,
+    ) => T,
+  ) {
+    return this.access(hash, code, async (access) => {
+      // Re-resolve persisted content in the authorized room. A recycled public room
+      // code must never deliver a cached message from its previous incarnation.
+      const stored = await this.repository.findPublic(
+        access.tx,
+        access.room.id,
+        messageId,
+      );
+      if (!stored) return;
+      this.assertLive(access);
+      return action(access, this.publicMessage(stored, access.room.code));
+    });
   }
 
   history(hash: string, code: string, query: unknown) {

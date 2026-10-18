@@ -213,3 +213,17 @@ text sends are documented in `docs/websocket/messaging.md`. They require the sam
 anonymous credential, accessible room, and ACTIVE membership. Public participant IDs
 are available in messaging subscription acknowledgements and message authors; no
 fields are added to existing room responses in this milestone.
+
+
+## Rate limits and physical cleanup
+
+Room creation and join attempts now enforce configurable identity/network limits.
+An ACTIVE duplicate join still preserves membership but counts as an attempt.
+Exhaustion returns the existing error envelope with 429 RATE_LIMITED plus
+retryAfterMs, and a Retry-After header in seconds. Success response shapes are
+unchanged. Anonymous identity creation is network-limited as well.
+
+Expired rooms remain inaccessible immediately. Default cleanup starts one hour after
+expiresAt and runs in bounded batches; after final room deletion, reads/joins return
+404 rather than logical 410. See `docs/operations/messaging-safety.md` for limits,
+retention timing, and process-local deployment constraints.

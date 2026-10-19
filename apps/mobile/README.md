@@ -99,10 +99,28 @@ and its browser installed, run from the repository root:
 EXPO_PUBLIC_API_URL=http://127.0.0.1:8080/api/v1 pnpm --filter @ghosttag/mobile exec expo export --platform web --output-dir /tmp/ghosttag-mobile-web
 python3 -m http.server 18081 --bind 127.0.0.1 --directory /tmp/ghosttag-mobile-web
 # In another terminal:
-playwright cli -s=ghosttag-mobile open http://127.0.0.1:18081
+playwright cli -s=ghosttag-mobile open about:blank
 playwright cli -s=ghosttag-mobile run-code --filename=apps/mobile/test/browser-smoke.txt
 ```
 
 Use your Playwright browser configuration if Chrome is not the installed browser.
 The fixture uses synthetic credentials, mocks bundled API requests inside the isolated test browser session,
 and writes screenshots to `/tmp/ghosttag-home.png` and `/tmp/ghosttag-room.png`.
+
+## Brand assets
+
+The mobile home and startup screens use the approved reference at
+`docs/design/ghosttag-brand-reference.png`. Brand artwork, export dimensions,
+generation prompts, and rebuild instructions live in
+[assets/brand/README.md](assets/brand/README.md).
+
+```sh
+pnpm --filter @ghosttag/mobile brand:export
+pnpm --filter @ghosttag/mobile brand:check
+```
+
+Native app icons and the system splash require rebuilding/reinstalling the app;
+Expo Go uses its own launcher icon/splash. The JavaScript home/loading branding
+appears in Expo Go. Native splash placement remains controlled by each OS,
+including Android 12+ splash constraints. Native device visual verification remains
+pending. The four supported room vibes and all API/messaging behavior are retained.

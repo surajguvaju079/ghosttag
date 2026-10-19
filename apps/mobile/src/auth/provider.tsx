@@ -9,7 +9,8 @@ import {
 import { ApiClient, configuration, friendlyError } from "../api/client";
 import { browserPreview, credentialStore } from "./credential-store";
 import { Session } from "./session";
-import { Button, Screen, Text, styles, palette } from "../ui/primitives";
+import { Button, Text, styles } from "../ui/primitives";
+import { brand, BrandMark, BrandScreen } from "../ui/brand";
 import { ActivityIndicator, AppState, View } from "react-native";
 
 function createRuntime() {
@@ -40,15 +41,16 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   return runtime ? (
     <SessionGate runtime={runtime}>{children}</SessionGate>
   ) : (
-    <Screen>
+    <BrandScreen>
       <View style={styles.center}>
+        <BrandMark compact />
         <Text style={styles.title}>One quick setup.</Text>
         <Text style={styles.muted}>
           Set EXPO_PUBLIC_API_URL to your reachable API URL, including /api/v1.
           Restart Expo after changing environment variables.
         </Text>
       </View>
-    </Screen>
+    </BrandScreen>
   );
 }
 function SessionGate({
@@ -73,11 +75,9 @@ function SessionGate({
   }, [runtime]);
   if (state.status !== "ready" || !state.token)
     return (
-      <Screen>
+      <BrandScreen>
         <View style={styles.center}>
-          <Text style={styles.logo}>
-            GhostTag<Text style={{ color: palette.purple }}>✦</Text>
-          </Text>
+          <BrandMark compact />
           <Text style={styles.title}>
             {state.status === "invalid"
               ? "A fresh start?"
@@ -86,7 +86,7 @@ function SessionGate({
                 : "Finding your ghost…"}
           </Text>
           {state.status === "loading" ? (
-            <ActivityIndicator color={palette.purple} />
+            <ActivityIndicator color={brand.lavender} />
           ) : (
             <>
               <Text style={styles.muted}>
@@ -114,7 +114,7 @@ function SessionGate({
             </Text>
           )}
         </View>
-      </Screen>
+      </BrandScreen>
     );
   return (
     <Context.Provider value={{ ...runtime, token: state.token }}>

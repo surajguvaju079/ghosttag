@@ -157,13 +157,14 @@ async (page) => {
   });
   await page.goto("http://127.0.0.1:18081");
   await page
-    .getByRole("button", { name: "Create a moment" })
+    .getByRole("button", { name: "Create Room", exact: true })
     .waitFor({ timeout: 20000 });
+  await page.getByRole("textbox", { name: "Room name" }).click();
   await page
     .getByRole("textbox", { name: "Room name" })
     .fill("Midnight thoughts");
   await page.screenshot({ path: "/tmp/ghosttag-home.png", fullPage: true });
-  await page.getByRole("button", { name: "Create a moment" }).click();
+  await page.getByRole("button", { name: "Create Room", exact: true }).click();
   await page
     .getByText("Connected", { exact: true })
     .waitFor({ timeout: 20000 });
@@ -193,8 +194,8 @@ async (page) => {
     .getByRole("button", { name: "Leave Room", exact: true })
     .last()
     .click();
-  await page.getByRole("tab", { name: /Join Room/ }).waitFor();
-  await page.getByRole("tab", { name: /Join Room/ }).click();
+  await page.getByRole("button", { name: "Join a room", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Join a room", exact: true }).click();
   await page.getByRole("textbox", { name: "Room code" }).fill("gh-1234");
   await page.getByRole("button", { name: "Enter the room" }).click();
   await page.getByText("Connected", { exact: true }).waitFor();

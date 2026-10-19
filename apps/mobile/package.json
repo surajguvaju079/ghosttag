@@ -12,6 +12,7 @@
     "expo-font": "~57.0.4",
     "expo-glass-effect": "~57.0.4",
     "expo-image": "~57.0.5",
+    "expo-linear-gradient": "~57.0.2",
     "expo-linking": "~57.0.13",
     "expo-router": "~57.0.28",
     "expo-secure-store": "~57.0.4",
@@ -49,7 +50,9 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts",
     "build": "expo export --platform all",
-    "check:local": "node --import tsx scripts/check-local.ts"
+    "check:local": "node --import tsx scripts/check-local.ts",
+    "brand:export": "node scripts/export-brand-assets.cjs",
+    "brand:check": "node scripts/export-brand-assets.cjs --check"
   },
   "private": true
 }

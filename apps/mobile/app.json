@@ -2,18 +2,21 @@
   "expo": {
     "name": "GhostTag",
     "slug": "ghosttag",
+    "owner": "teambhariya",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/brand/app-icon.png",
     "scheme": "ghosttag",
     "userInterfaceStyle": "dark",
     "ios": {
+      "bundleIdentifier": "com.ghosttag",
       "icon": "./assets/brand/app-icon.png",
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "GhostTag connects to your development API on the local network during local testing."
       }
     },
     "android": {
+      "package": "com.ghosttag",
       "adaptiveIcon": {
         "backgroundColor": "#0F0B1F",
         "foregroundImage": "./assets/brand/adaptive-foreground.png",

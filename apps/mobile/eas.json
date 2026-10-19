@@ -10,9 +10,18 @@
     },
     "preview": {
       "environment": "preview",
+      "developmentClient": false,
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      }
+    },
+    "production": {
+      "environment": "production",
+      "developmentClient": false,
+      "distribution": "store",
+      "android": {
+        "buildType": "app-bundle"
       }
     }
   }

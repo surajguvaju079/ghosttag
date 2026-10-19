@@ -9,17 +9,26 @@ and Xcode and has not been performed here.
 ## Build prerequisites
 
 The mobile workspace includes SDK-compatible `expo-dev-client`. Its `eas.json`
-defines an internal **development** APK with the development client and a
-**preview** APK using the standalone release runtime for final splash checks.
-No production profile, signing settings, package identifier, or backend contract
-is changed by this milestone.
+defines these independent profiles (no credentials or submit configuration):
 
-`app.json` currently defines neither `android.package` nor an EAS project ID.
-Before a native build, obtain the approved Android application ID and existing
-Expo project from the project owner. Do not accept a generated package name,
-create a replacement project, or replace existing credentials. Set/link only the
-owner-approved values in the normal project setup. This is a prerequisite, not a
-reason to invent identifiers in this change.
+| Profile     | Environment | Distribution | Android artifact | Runtime                              |
+| ----------- | ----------- | ------------ | ---------------- | ------------------------------------ |
+| development | development | internal     | APK              | Development client; Metro required   |
+| preview     | preview     | internal     | APK              | Standalone release runtime; no Metro |
+| production  | production  | store        | AAB              | Standalone store runtime             |
+
+Approved local configuration: name **GhostTag**, slug **ghosttag**, Android package
+**com.ghosttag**, iOS bundle identifier **com.ghosttag**, deep-link scheme
+**ghosttag**. Branding, splash and launcher layers are preserved. Production uses
+normal store distribution without changing signing credentials or enabling
+submission. Version increments remain an explicit release step.
+
+The read-only `eas whoami` check returned the personal user **teambhariya**.
+`expo.owner` is pinned to **teambhariya**, rather than an organization. No
+`extra.eas.projectId` is configured, so this checkout is not linked to an EAS
+project yet. No remote initialization, build, credential mutation, or publishing
+was performed. Use only this personal account; stop if a different account is
+shown by EAS.
 
 Run from the repository root:
 
@@ -27,12 +36,32 @@ Run from the repository root:
 pnpm install --frozen-lockfile
 pnpm --filter @ghosttag/mobile brand:check
 cd apps/mobile
-eas login
-# Link the owner-approved EXISTING project when prompted; do not create another.
-eas init
-# Inspect the resulting app config: approved package/project only.
-pnpm exec expo config --type public
+eas whoami
+# Only if logged out: eas login, then eas whoami again
 ```
+
+Confirm `eas whoami` prints `teambhariya`. If logged out, run `eas login`
+interactively with that personal account and check again. If a different account
+is active, stop and resolve the login interactively; do not change the owner or
+link another account. Then initialize:
+
+```sh
+eas init
+pnpm exec expo config --type public
+eas project:info
+```
+
+At initialization, link the existing **personal** `@teambhariya/ghosttag` project,
+or create it under that personal account if it does not exist. Confirm the owner
+before accepting; cancel any organization selection. Do not use `--force` to
+replace a project link. Verify the resulting `owner` and `extra.eas.projectId`;
+never copy an unrelated project's ID. Initialization links/creates an EAS project
+but does not build, sign, or publish the application. This initialization step
+has not been executed by the agent.
+
+The build commands below are operator instructions, **not authorization** to start
+a cloud build, generate/replace signing credentials, or publish. Obtain approval
+before each such action. Inspect credential prompts rather than accepting defaults.
 
 Ensure EAS uses the approved project and credentials before submitting a build.
 Cloud builds upload application sources and may consume build quota. Configure

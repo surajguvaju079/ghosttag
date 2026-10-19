@@ -109,6 +109,10 @@ and writes screenshots to `/tmp/ghosttag-home.png` and `/tmp/ghosttag-room.png`.
 
 ## Brand assets
 
+For native APK development/preview commands, identifier prerequisites, themed-icon
+checks and standalone splash acceptance, see
+[native branding verification](../../docs/operations/native-branding.md).
+
 The mobile home and startup screens use the approved reference at
 `docs/design/ghosttag-brand-reference.png`. Brand artwork, export dimensions,
 generation prompts, and rebuild instructions live in

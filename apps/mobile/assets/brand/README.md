@@ -16,12 +16,14 @@ room vibes retain the four existing backend values.
 | `mascot.png`              | 512×512 transparent UI mascot                                      |
 | `app-icon.png`            | 1024×1024 opaque RGB iOS/general app icon                          |
 | `adaptive-foreground.png` | 1024×1024 transparent Android foreground with 128px canvas margins |
+| `monochrome-source.png`   | Generated black/white stencil master of the ghost and orbital ring |
+| `adaptive-monochrome.png` | 1024×1024 white-only transparent Android themed-icon layer         |
 | `splash.png`              | 1024×1024 transparent native splash image                          |
 | `favicon.png`             | 64×64 opaque web favicon                                           |
 
-The Android adaptive background is the solid midnight color `#0F0B1F`. A dedicated
-Android monochrome/themed icon is omitted; the previous Expo monochrome mark is
-no longer referenced. Full-color adaptive icons are configured. Native launcher
+The Android adaptive background is the solid midnight color `#0F0B1F`. The dedicated
+`adaptive-monochrome.png` white alpha mask is configured as `monochromeImage` for
+Android 13+ launchers with themed icons enabled. Native launcher
 masks and splash placement are controlled by the OS and still need device review.
 The icon source has square corners; the OS applies its own mask.
 
@@ -34,10 +36,11 @@ pnpm --filter @ghosttag/mobile brand:check
 
 The exporter uses the installed Expo SDK's image utilities for deterministic PNG
 sizing, transparency and padding. It does not regenerate artwork or call an image
-API, and adds no runtime imaging dependency. Keep both masters when updating the
+API, and adds no runtime imaging dependency. Keep all masters when updating the
 SDK; the export script relies on the SDK's image tooling. Checks verify export
 dimensions, full opacity of the iOS icon, and transparent Android foreground
-margins and the solid foreground inside Android's 66/108 safe circle
+margins, white-only monochrome pixels, transparent splash edges, source-export
+pixel consistency, and the solid foreground inside Android's 66/108 safe circle
 (see [Android adaptive icon guidance](https://developer.android.com/develop/ui/compose/system/icon_design_adaptive)). Rebuild/reinstall native binaries after changing app icons or splash
 configuration. Expo Go does not replace its own launcher icon with this asset.
 
@@ -70,3 +73,38 @@ Requested generation dimensions are guidance; `brand:export` normalizes the
 actual masters to the platform sizes above and preserves the transparent mascot's
 alpha channel. Pixel checks and web previews do not constitute native-device
 visual verification.
+
+## Monochrome export and native splash
+
+Mode: built-in `image_gen`, new stencil generation based on the existing mascot's
+ghost/eyes/arm/scalloped-base/orbit design. No CLI/API-key fallback. Transparent
+generation experiments had noisy contours and were discarded; the accepted
+black/white master is converted deterministically to the final transparent layer.
+Final prompt:
+
+```text
+Use case: logo-brand. Production GhostTag monochrome icon master. Pure opaque BLACK square background, pure WHITE flat graphic, sharp clean vector-style curves. One friendly white ghost with rounded head, two large BLACK oval eyes (negative space), raised left arm, softly scalloped lower edge, and one tilted Saturn orbital ring wrapping around body with BLACK gaps separating ring from body. Preserve GhostTag ghost-and-orbit concept. Center within middle 60 percent of square canvas, lots of black padding. NO stars, NO texture, NO gray, NO transparency, NO gradients, NO shadows, NO glowing, NO noise, NO 3D, NO text, NO border. Clean two-color stencil. Entire ghost and ring in white, eyes and gaps solid black. Crisp professional logo.
+```
+
+The monochrome stencil is a dedicated simplified ghost-and-orbit drawing, not the
+full-color icon used as an Android monochrome layer. Its oval eyes and orbital-ring
+gaps become transparent negative space. `brand:export` thresholds the black/white
+master into a hard white alpha mask, crops transparent padding, and scales the
+artwork into a centered 300px radius before antialiasing. All visible output pixels
+have RGB 255/255/255; partial alpha is confined to resampled contour edges. The
+entire visible mask remains inside Android's 66/108 safe circle. The opaque black
+master is only a reproducible export input and is not configured as an app icon.
+Full-color transparent exports also discard alpha values of 1/255 introduced by
+the source/export pipeline, so their outer canvas edges are fully transparent.
+
+The splash uses the existing transparent mascot at a 200-point image width with
+`resizeMode: contain`; full-screen stretching is disabled. Expo's Android plugin
+uses center gravity and the iOS storyboard uses centered aspect-fit constraints.
+The app is fixed to dark appearance: the base midnight background and mascot apply
+in both system appearance modes; no separate, conflicting dark override is needed.
+Keep native screenshot review pending until a standalone preview build is installed.
+Expo Go and development builds do not fully reproduce standalone splash behavior;
+see [Expo splash documentation](https://docs.expo.dev/versions/v57.0.0/sdk/splash-screen/).
+
+See [native branding verification](../../../../docs/operations/native-branding.md)
+for development/preview builds and the launcher/splash checklist.

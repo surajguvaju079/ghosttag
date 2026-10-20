@@ -17,47 +17,18 @@ defines these independent profiles (no credentials or submit configuration):
 | preview     | preview     | internal     | APK              | Standalone release runtime; no Metro |
 | production  | production  | store        | AAB              | Standalone store runtime             |
 
-Approved local configuration: name **GhostTag**, slug **ghosttag**, Android package
+Approved configuration: name **GhostTag**, slug **ghosttag**, Android package
 **com.ghosttag**, iOS bundle identifier **com.ghosttag**, deep-link scheme
-**ghosttag**. Branding, splash and launcher layers are preserved. Production uses
-normal store distribution without changing signing credentials or enabling
-submission. Version increments remain an explicit release step.
+**ghosttag**. Owner **surajguvaju** and EAS project ID
+**ec4f917f-6671-4b01-be4e-0b0271542e91** were linked by the user and are preserved.
+Do not reinitialize/relink the project, select an organization, or use a different
+account. No remote account access was performed during release preparation.
 
-The read-only `eas whoami` check returned the personal user **teambhariya**.
-`expo.owner` is pinned to **teambhariya**, rather than an organization. No
-`extra.eas.projectId` is configured, so this checkout is not linked to an EAS
-project yet. No remote initialization, build, credential mutation, or publishing
-was performed. Use only this personal account; stop if a different account is
-shown by EAS.
-
-Run from the repository root:
-
-```sh
-pnpm install --frozen-lockfile
-pnpm --filter @ghosttag/mobile brand:check
-cd apps/mobile
-eas whoami
-# Only if logged out: eas login, then eas whoami again
-```
-
-Confirm `eas whoami` prints `teambhariya`. If logged out, run `eas login`
-interactively with that personal account and check again. If a different account
-is active, stop and resolve the login interactively; do not change the owner or
-link another account. Then initialize:
-
-```sh
-eas init
-pnpm exec expo config --type public
-eas project:info
-```
-
-At initialization, link the existing **personal** `@teambhariya/ghosttag` project,
-or create it under that personal account if it does not exist. Confirm the owner
-before accepting; cancel any organization selection. Do not use `--force` to
-replace a project link. Verify the resulting `owner` and `extra.eas.projectId`;
-never copy an unrelated project's ID. Initialization links/creates an EAS project
-but does not build, sign, or publish the application. This initialization step
-has not been executed by the agent.
+Production AAB and draft internal submission details, versioning, endpoint gates,
+policy blockers and required approvals are in the
+[Google Play release checklist](../release/google-play/release-checklist.md) and
+[submission runbook](../release/google-play/submission.md). Native branding checks
+below still require an actual installed build.
 
 The build commands below are operator instructions, **not authorization** to start
 a cloud build, generate/replace signing credentials, or publish. Obtain approval

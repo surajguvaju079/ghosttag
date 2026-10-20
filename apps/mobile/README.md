@@ -128,3 +128,15 @@ Expo Go uses its own launcher icon/splash. The JavaScript home/loading branding
 appears in Expo Go. Native splash placement remains controlled by each OS,
 including Android 12+ splash constraints. Native device visual verification remains
 pending. The four supported room vibes and all API/messaging behavior are retained.
+
+## Google Play release preparation
+
+See [release gates and policy readiness](../../docs/release/google-play/release-checklist.md)
+and [build/upload workflow](../../docs/release/google-play/submission.md). Production
+build/export requires public HTTPS API/socket configuration plus published privacy,
+terms and community-guidelines URLs. The production profile sets
+`EXPO_PUBLIC_APP_ENV=production`. There is no localhost fallback. Configure actual
+owner-controlled endpoints in EAS production variables; do not use the .env example
+for a release. The home screen's Safety & privacy entry describes current behavior;
+terms acceptance, user blocking and identity deletion remain release blockers.
+`pnpm --filter @ghosttag/mobile store:assets` exports the approved-brand Play icon.

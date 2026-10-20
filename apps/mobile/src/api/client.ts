@@ -8,6 +8,7 @@ import type {
   RoomDetails,
   Vibe,
 } from "./contracts";
+import { assertProductionEndpoints } from "./release-policy";
 
 export class ApiError extends Error {
   readonly retryAt: number;
@@ -35,7 +36,12 @@ export function normalizeCode(value: string) {
     });
   return code;
 }
-export function configuration(apiValue?: string, socketValue?: string) {
+export function configuration(
+  apiValue?: string,
+  socketValue?: string,
+  production = process.env.EXPO_PUBLIC_APP_ENV === "production",
+) {
+  if (production) assertProductionEndpoints(apiValue, socketValue);
   if (!apiValue)
     throw new Error("Set EXPO_PUBLIC_API_URL before starting Expo.");
   const api = new URL(apiValue);

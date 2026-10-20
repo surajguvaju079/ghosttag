@@ -53,7 +53,8 @@
     "build": "expo export --platform all",
     "check:local": "node --import tsx scripts/check-local.ts",
     "brand:export": "node scripts/export-brand-assets.cjs",
-    "brand:check": "node scripts/export-brand-assets.cjs --check"
+    "brand:check": "node scripts/export-brand-assets.cjs --check",
+    "store:assets": "node scripts/export-store-assets.cjs"
   },
   "private": true
 }

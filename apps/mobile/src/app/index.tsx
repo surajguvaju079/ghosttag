@@ -238,6 +238,18 @@ export default function Home() {
             No profiles. No followers. Just now.{"\n"}Rooms disappear after 24
             hours.
           </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Safety and privacy"
+            onPress={() => router.push("./safety")}
+            style={{
+              minHeight: 48,
+              justifyContent: "center",
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ color: brand.lavender }}>Safety & privacy</Text>
+          </Pressable>
           {browserPreview && (
             <Text style={[home.note, { textAlign: "center" }]}>
               Browser preview · session resets on page reload.

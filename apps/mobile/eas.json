@@ -1,4 +1,7 @@
 {
+  "cli": {
+    "appVersionSource": "local"
+  },
   "build": {
     "development": {
       "environment": "development",
@@ -18,10 +21,22 @@
     },
     "production": {
       "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "production"
+      },
       "developmentClient": false,
       "distribution": "store",
       "android": {
         "buildType": "app-bundle"
+      }
+    }
+  },
+  "submit": {
+    "internal": {
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft",
+        "changesNotSentForReview": true
       }
     }
   }

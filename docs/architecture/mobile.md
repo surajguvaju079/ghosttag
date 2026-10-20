@@ -122,3 +122,22 @@ through HTTP and expects a structured 401 from the unauthenticated `/rooms`
 namespace. It does not prove phone routing, SecureStore persistence, or keyboard
 behavior. Local-development configuration is separate from deployment; no API
 contract, authorization rule or Prisma schema is changed.
+
+## Google Play release preparation
+
+`app.config.js` validates production API/socket URLs and published policy URLs before
+Expo build/export. The production EAS profile pins EXPO_PUBLIC_APP_ENV=production;
+mobile configuration repeats the endpoint checks at runtime. The concurrent developer tunnel override in the session provider is retained only outside production; production always reads the validated public environment variables. Local development
+HTTP URLs remain supported outside that profile. Public HTTPS hostname syntax is
+not proof of DNS/TLS reachability or ownership. Updates are embedded; no OTA update
+channel/runtime contract was added. Release settings disable Android backups and
+unneeded text-MVP permissions, with final merged-manifest verification pending.
+
+Home links to Safety & privacy with accurate retention/reporting limitations and
+owner-configured HTTPS policy links. This screen is informational, not legal
+acceptance, blocking, deletion, or a staffed moderation service. Versioned consent,
+room-scoped blocking, deletion/retention exceptions and age policy require the
+human-owned contract/privacy decisions recorded in the
+[release gates](../release/google-play/release-checklist.md). No server API/schema
+changes were invented to resolve these decisions. Legal drafts are not published
+policy. The existing 24-hour room lifecycle and public identity model remain intact.

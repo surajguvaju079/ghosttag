@@ -1,9 +1,9 @@
-export default () => ({
-  app: {
-    port: parseInt(process.env.PORT ?? '3000', 10),
-    environment: process.env.NODE_ENV ?? 'development',
-  },
-  database: {
-    url: process.env.DATABASE_URL
-  }
-})
+import { validateEnvironment } from './environment';
+
+export default () => {
+  const { port, environment, databaseUrl } = validateEnvironment(process.env);
+  return {
+    app: { port, environment },
+    database: { url: databaseUrl },
+  };
+};

@@ -62,6 +62,7 @@ test("Expo production config fails closed and preserves owner/linkage/branding",
     "EXPO_PUBLIC_API_URL",
     "EXPO_PUBLIC_SOCKET_URL",
     "EXPO_PUBLIC_PRIVACY_URL",
+    "EXPO_PUBLIC_CHILD_SAFETY_URL",
     "EXPO_PUBLIC_TERMS_URL",
     "EXPO_PUBLIC_COMMUNITY_URL",
   ];
@@ -77,6 +78,8 @@ test("Expo production config fails closed and preserves owner/linkage/branding",
     assert.throws(() => appConfig({ config: base }));
     process.env.EXPO_PUBLIC_PRIVACY_URL =
       "https://policies.release-fixture.net/privacy";
+    process.env.EXPO_PUBLIC_CHILD_SAFETY_URL =
+      "https://policies.release-fixture.net/child-safety";
     process.env.EXPO_PUBLIC_TERMS_URL =
       "https://policies.release-fixture.net/terms";
     process.env.EXPO_PUBLIC_COMMUNITY_URL =

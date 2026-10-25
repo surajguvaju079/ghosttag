@@ -184,6 +184,10 @@ test("API uses bearer auth, normalizes codes, discards create UUID and sends exa
   assert.deepEqual(JSON.parse(requests[2].init?.body as string), {
     reason: "HARASSMENT",
   });
+  await api.report("credential", "GH-1234", message(2).messageId, "CHILD_SAFETY");
+  assert.deepEqual(JSON.parse(requests[3].init?.body as string), {
+    reason: "CHILD_SAFETY",
+  });
   assert.ok(!requests.some((request) => request.url.includes("credential")));
 });
 test("HTTP authentication and rate-limit failures retain structured metadata", async () => {

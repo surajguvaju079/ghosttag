@@ -18,6 +18,7 @@ module.exports = ({ config }) => {
     );
     for (const value of [
       process.env.EXPO_PUBLIC_PRIVACY_URL,
+      process.env.EXPO_PUBLIC_CHILD_SAFETY_URL,
       process.env.EXPO_PUBLIC_TERMS_URL,
       process.env.EXPO_PUBLIC_COMMUNITY_URL,
     ])

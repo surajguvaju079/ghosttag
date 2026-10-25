@@ -9,6 +9,7 @@ export default function Safety() {
   const [error, setError] = useState(false);
   const policies = [
     ["Privacy policy", process.env.EXPO_PUBLIC_PRIVACY_URL],
+    ["Child safety standards", process.env.EXPO_PUBLIC_CHILD_SAFETY_URL],
     ["Terms of service", process.env.EXPO_PUBLIC_TERMS_URL],
     ["Community guidelines", process.env.EXPO_PUBLIC_COMMUNITY_URL],
   ];
@@ -29,6 +30,15 @@ export default function Safety() {
           and copy what you share. Avoid sharing personal or sensitive
           information.
         </Text>
+        <View style={styles.card}>
+          <Text style={styles.label}>CHILD SAFETY</Text>
+          <Text>
+            Child sexual abuse and exploitation (CSAE), child sexual abuse
+            material (CSAM), grooming, and sexualization of minors are
+            prohibited. Use Report on a message and choose Child safety for
+            urgent concerns. A report does not guarantee a response.
+          </Text>
+        </View>
         <View style={styles.card}>
           <Text style={styles.label}>REPORT A MESSAGE</Text>
           <Text>

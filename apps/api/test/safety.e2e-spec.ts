@@ -359,6 +359,18 @@ describe('Messaging safety + PostgreSQL + Socket.IO', () => {
       .expect(404);
   });
 
+  it('accepts the dedicated child-safety report reason', async () => {
+    const target = await message();
+    await report(target.publicId, member.token, code, 'CHILD_SAFETY').expect(
+      202,
+    );
+    await expect(
+      prisma.messageReport.findFirstOrThrow({
+        where: { messageId: target.id },
+      }),
+    ).resolves.toMatchObject({ reason: 'CHILD_SAFETY' });
+  });
+
   it('rate limits reporting attempts', async () => {
     configure({ SAFETY_MESSAGE_REPORT_IDENTITY_LIMIT: 1 });
     const target = await message();

@@ -9,6 +9,7 @@ const reasons = new Set([
   'HATE',
   'SEXUAL_CONTENT',
   'THREAT',
+  'CHILD_SAFETY',
   'OTHER',
 ]);
 

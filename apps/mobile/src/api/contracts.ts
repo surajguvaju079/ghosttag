@@ -44,6 +44,7 @@ export const REPORT_REASONS = [
   "HATE",
   "SEXUAL_CONTENT",
   "THREAT",
+  "CHILD_SAFETY",
   "OTHER",
 ] as const;
 export type ReportReason = (typeof REPORT_REASONS)[number];

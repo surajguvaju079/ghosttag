@@ -15,14 +15,11 @@ import { ActivityIndicator, AppState, View } from "react-native";
 
 function createRuntime() {
   try {
-    const production = process.env.EXPO_PUBLIC_APP_ENV === "production";
     const config = configuration(
-      production
-        ? process.env.EXPO_PUBLIC_API_URL
-        : "https://trouble-undoing-annex.ngrok-free.dev/api/v1",
-      production
-        ? process.env.EXPO_PUBLIC_SOCKET_URL
-        : "https://trouble-undoing-annex.ngrok-free.dev",
+
+      "https://api-ghosttag.vyomnix.com/api/v1",
+
+      "https://api-ghosttag.vyomnix.com",
     );
     let session: Session;
     const api = new ApiClient(config.apiUrl, fetch, (token) =>

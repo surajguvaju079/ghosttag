@@ -1,25 +1,23 @@
-import { Controller, Get, Post, Req, UseGuards } from "@nestjs/common";
-import { IdentityService } from "./identity.service";
-import type { AuthenticatedRequest } from "src/common/auth/authenticated-request";
-import { AnonymousIdentityGuard } from "src/common/auth/anonymous-identity.guard";
-
-
-
+import { RateLimit } from 'src/safety/rate-limit.guard';
+import { Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { IdentityService } from './identity.service';
+import type { AuthenticatedRequest } from 'src/common/auth/authenticated-request';
+import { AnonymousIdentityGuard } from 'src/common/auth/anonymous-identity.guard';
 
 @Controller('identity')
 export class IdentityController {
-  constructor(private readonly identityService: IdentityService) { }
+  constructor(private readonly identityService: IdentityService) {}
   @Post()
+  @RateLimit('IDENTITY_CREATE')
   createIdentity() {
     return this.identityService.createIdentity();
   }
-
 
   @Get('me')
   @UseGuards(AnonymousIdentityGuard)
   getIdentity(@Req() request: AuthenticatedRequest) {
     return {
-      identityId: request.identity.id
-    }
+      identityId: request.identity.id,
+    };
   }
 }

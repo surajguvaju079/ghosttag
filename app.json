@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "ec4f917f-6671-4b01-be4e-0b0271542e91"
+      }
+    },
+    "android": {
+      "package": "com.ghosttag"
+    }
+  }
+}

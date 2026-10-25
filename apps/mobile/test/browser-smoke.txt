@@ -1,0 +1,224 @@
+async (page) => {
+  const code = "GH-1234";
+  const ghost = {
+    ghostName: "Quiet Raven",
+    ghostAvatar: "raven",
+    role: "OWNER",
+  };
+  const author = {
+    participantId: "p_0123456789abcdef0123456789abcdef",
+    ghostName: ghost.ghostName,
+    ghostAvatar: ghost.ghostAvatar,
+  };
+  const messages = [];
+  let reports = 0,
+    leaves = 0,
+    identities = 0,
+    joins = 0,
+    subscriptions = 0;
+  const room = {
+    code,
+    name: "Midnight thoughts",
+    vibe: "DEEP_TALK",
+    createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 3600000).toISOString(),
+    activeMemberCount: 2,
+    maxCapacity: 50,
+  };
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.route("**/api/v1/**", async (route) => {
+    const path =
+      "/api/v1" + route.request().url().split("/api/v1")[1].split("?")[0];
+    let body = {};
+    let status = 200;
+    if (route.request().method() === "OPTIONS") {
+      await route.fulfill({
+        status: 204,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Headers": "authorization,content-type",
+          "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+        },
+      });
+      return;
+    }
+    if (path === "/api/v1/identity") {
+      identities++;
+      body = {
+        token: "smoke-credential",
+        identityId: "INTERNAL-DO-NOT-RENDER",
+      };
+    } else if (path === "/api/v1/rooms")
+      body = { ...room, id: "INTERNAL-DO-NOT-RENDER", membership: ghost };
+    else if (path.endsWith("/reports")) {
+      reports++;
+      body = { accepted: true };
+      status = 202;
+    } else if (path.endsWith("/messages"))
+      body = { messages: [...messages].reverse(), nextCursor: null };
+    else if (path.endsWith("/members"))
+      body = {
+        members: [
+          { ...ghost, joinedAt: room.createdAt },
+          {
+            ghostName: "Quiet Raven",
+            ghostAvatar: "fox",
+            role: "MEMBER",
+            joinedAt: room.createdAt,
+          },
+        ],
+        total: 2,
+        maxCapacity: 50,
+      };
+    else if (path.endsWith("/membership"))
+      body = {
+        membership: {
+          ...ghost,
+          status: "ACTIVE",
+          joinedAt: room.createdAt,
+          leftAt: null,
+        },
+      };
+    else if (path.endsWith("/leave")) {
+      leaves++;
+      status = 204;
+    } else if (path.endsWith("/join")) {
+      joins++;
+      body = { room, membership: ghost };
+    } else body = { room, membership: ghost };
+    await route.fulfill({
+      status,
+      contentType: "application/json",
+      headers: { "Access-Control-Allow-Origin": "*" },
+      ...(status === 204 ? {} : { body: JSON.stringify(body) }),
+    });
+  });
+  await page.routeWebSocket("**/socket.io/**", (socket) => {
+    socket.send(
+      "0" +
+        JSON.stringify({
+          sid: "fixture",
+          upgrades: [],
+          pingInterval: 25000,
+          pingTimeout: 20000,
+          maxPayload: 16384,
+        }),
+    );
+    socket.onMessage((packet) => {
+      const value = String(packet);
+      if (value.startsWith("40/rooms,")) {
+        socket.send("40/rooms," + JSON.stringify({ sid: "room-fixture" }));
+        return;
+      }
+      const match = value.match(/^42\/rooms,(\d+)(.*)$/);
+      if (!match) return;
+      const [event, payload] = JSON.parse(match[2]);
+      let data;
+      if (event === "room:subscribe") {
+        subscriptions++;
+        data = {
+          code,
+          subscribed: true,
+          participant: { ...author, role: "OWNER" },
+        };
+      }
+      if (event === "room:unsubscribe") data = { code, subscribed: false };
+      if (event === "message:send") {
+        if (
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+            payload.clientMessageId,
+          )
+        )
+          throw new Error("Send key was not UUIDv4");
+        if (
+          Object.keys(payload).sort().join(",") !== "clientMessageId,code,text"
+        )
+          throw new Error("Unexpected send identifiers");
+        const message = {
+          code,
+          messageId:
+            "m_" + (messages.length + 1).toString(16).padStart(32, "0"),
+          text: payload.text,
+          author,
+          createdAt: new Date().toISOString(),
+        };
+        messages.push(message);
+        data = {
+          clientMessageId: payload.clientMessageId,
+          replayed: false,
+          message,
+        };
+        socket.send("42/rooms," + JSON.stringify(["message:created", message]));
+      }
+      socket.send(
+        "43/rooms," + match[1] + JSON.stringify([{ ok: true, data }]),
+      );
+    });
+  });
+  await page.goto("http://127.0.0.1:18081");
+  await page
+    .getByRole("button", { name: "Create Room", exact: true })
+    .waitFor({ timeout: 20000 });
+  await page.getByRole("textbox", { name: "Room name" }).click();
+  await page
+    .getByRole("textbox", { name: "Room name" })
+    .fill("Midnight thoughts");
+  await page.screenshot({ path: "/tmp/ghosttag-home.png", fullPage: true });
+  await page.getByRole("button", { name: "Create Room", exact: true }).click();
+  await page
+    .getByText("Connected", { exact: true })
+    .waitFor({ timeout: 20000 });
+  if (!page.url().endsWith("/room/GH-1234"))
+    throw new Error("Public-code navigation failed: " + page.url());
+  await page
+    .getByRole("textbox", { name: "Message", exact: true })
+    .fill("Hello from GhostTag");
+  await page.getByRole("button", { name: "Send ↑", exact: true }).click();
+  await page.getByText("Hello from GhostTag", { exact: true }).waitFor();
+  if (
+    (await page.getByText("Hello from GhostTag", { exact: true }).count()) !== 1
+  )
+    throw new Error("Duplicate chat message");
+  await page.screenshot({ path: "/tmp/ghosttag-room.png", fullPage: true });
+  await page
+    .getByRole("button", { name: "Report message by Quiet Raven" })
+    .click();
+  await page.getByRole("radio", { name: /harassment/i }).click();
+  await page.getByRole("button", { name: "Confirm report" }).click();
+  await page.getByText(/Report received/).waitFor();
+  await page.getByRole("button", { name: "👻 2/50" }).click();
+  await page.getByText("In the room", { exact: true }).waitFor();
+  await page.getByRole("button", { name: "Back to conversation" }).click();
+  await page.getByRole("button", { name: "Leave Room", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Leave Room", exact: true })
+    .last()
+    .click();
+  await page.getByRole("button", { name: "Join a room", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Join a room", exact: true }).click();
+  await page.getByRole("textbox", { name: "Room code" }).fill("gh-1234");
+  await page.getByRole("button", { name: "Enter the room" }).click();
+  await page.getByText("Connected", { exact: true }).waitFor();
+  if (
+    (await page.locator("body").innerText()).includes("INTERNAL-DO-NOT-RENDER")
+  )
+    throw new Error("Internal ID leaked");
+  if (
+    identities !== 1 ||
+    reports !== 1 ||
+    leaves !== 1 ||
+    joins !== 1 ||
+    subscriptions !== 2
+  )
+    throw new Error("Unexpected request counts");
+  return {
+    result: "passed",
+    target: "390x844 browser preview with mocked REST/Socket.IO contracts",
+    identities,
+    reports,
+    leaves,
+    joins,
+    subscriptions,
+    messageCount: messages.length,
+  };
+}

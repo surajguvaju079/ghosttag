@@ -86,12 +86,14 @@ model Room {
   messages    Message[]
   polls       Poll[]
 
+  @@index([expiresAt, id])
   @@index([status, expiresAt])
   @@index([creatorId])
   @@map("rooms")
 }
 
 model RoomMembership {
+  publicId    String               @unique @default(dbgenerated("('p_'::text || replace((gen_random_uuid())::text, '-'::text, ''::text))")) @db.VarChar(34)
   id          String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   roomId      String               @db.Uuid
   userId      String               @db.Uuid
@@ -102,9 +104,10 @@ model RoomMembership {
   leftAt      DateTime?            @db.Timestamptz(6)
   joinedAt    DateTime             @default(now()) @db.Timestamptz(6)
 
-  room      Room          @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  user      AnonymousUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  room      Room            @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user      AnonymousUser   @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages  Message[]
+  reports   MessageReport[]
   reactions Reaction[]
   pollVotes PollVote[]
 
@@ -115,19 +118,39 @@ model RoomMembership {
 }
 
 model Message {
-  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  roomId       String   @db.Uuid
-  membershipId String   @db.Uuid
-  text         String   @db.VarChar(2000)
-  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  publicId        String   @unique @default(dbgenerated("('m_'::text || replace((gen_random_uuid())::text, '-'::text, ''::text))")) @db.VarChar(34)
+  clientMessageId String?  @db.VarChar(36)
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roomId          String   @db.Uuid
+  membershipId    String   @db.Uuid
+  text            String   @db.VarChar(2000)
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
 
-  room       Room           @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  membership RoomMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  room       Room            @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  membership RoomMembership  @relation(fields: [membershipId], references: [id], onDelete: Cascade)
   reactions  Reaction[]
+  reports    MessageReport[]
 
+  @@unique([membershipId, clientMessageId])
+  @@index([roomId, createdAt, publicId])
   @@index([roomId, createdAt])
   @@index([membershipId])
   @@map("messages")
+}
+
+model MessageReport {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  messageId            String   @db.Uuid
+  reporterMembershipId String   @db.Uuid
+  reason               String   @db.VarChar(32)
+  createdAt            DateTime @default(now()) @db.Timestamptz(6)
+
+  message  Message        @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  reporter RoomMembership @relation(fields: [reporterMembershipId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, reporterMembershipId])
+  @@index([reporterMembershipId])
+  @@map("message_reports")
 }
 
 model Reaction {

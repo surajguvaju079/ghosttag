@@ -55,3 +55,9 @@ export type Failure = {
   retryAfterMs?: number;
 };
 export type Ack<T> = { ok: true; data: T } | { ok: false; error: Failure };
+
+export type JoinedRoom = Pick<Room, "code" | "name" | "vibe" | "expiresAt"> & {
+  lockedUntil: string | null;
+  membershipStatus: "ACTIVE" | "LEFT";
+};
+export type JoinedRooms = { rooms: JoinedRoom[] };

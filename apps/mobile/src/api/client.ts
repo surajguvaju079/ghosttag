@@ -1,5 +1,6 @@
 import type {
   Failure,
+  JoinedRooms,
   Ghost,
   History,
   Membership,
@@ -187,6 +188,9 @@ export class ApiClient {
       "POST",
     );
     return code;
+  }
+  rooms(token: string) {
+    return this.request<JoinedRooms>("/rooms", token);
   }
   details(token: string, code: string) {
     return this.request<RoomDetails>(`/rooms/${normalizeCode(code)}`, token);

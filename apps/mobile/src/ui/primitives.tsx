@@ -26,13 +26,19 @@ export function Text({ style, ...props }: TextProps) {
 export function Screen({
   children,
   style,
+  bottomInset = true,
 }: {
   children: ReactNode;
   style?: ViewStyle;
+  bottomInset?: boolean;
 }) {
   return (
     <SafeAreaView
-      edges={["top", "left", "right", "bottom"]}
+      edges={
+        bottomInset
+          ? ["top", "left", "right", "bottom"]
+          : ["top", "left", "right"]
+      }
       style={[styles.screen, style]}
     >
       {children}

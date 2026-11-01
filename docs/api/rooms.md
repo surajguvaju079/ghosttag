@@ -4,6 +4,39 @@ All endpoints require `Authorization: Bearer <anonymous-identity-token>`.
 Authentication establishes the user; clients cannot supply internal user IDs.
 Room codes are public identifiers, trimmed and converted to uppercase before lookup.
 
+## My rooms
+
+`GET /api/v1/rooms` returns `200 OK` with `Cache-Control: no-store`:
+
+```json
+{
+  "rooms": [
+    {
+      "code": "GH-4829",
+      "name": "Late Night Thoughts",
+      "vibe": "DEEP_TALK",
+      "expiresAt": "2026-11-02T05:15:00.000Z",
+      "lockedUntil": null,
+      "membershipStatus": "ACTIVE"
+    }
+  ]
+}
+```
+
+The authenticated identity is the only membership selector. Results include its
+ACTIVE and LEFT memberships (including owners) in ACTIVE rooms whose `expiresAt`
+is strictly later than the query timestamp. Expired/deleted rooms are absent;
+locked rooms remain listed so the client can indicate temporary unavailability.
+`membershipStatus` is ACTIVE or LEFT; `name` and `lockedUntil` are nullable.
+Ordering is original membership `joinedAt` descending, then public room code
+ascending. The complete list is returned without pagination or truncation.
+
+This read does not join/reactivate memberships, extend expiry, or authorize chat
+access. ACTIVE members open through the existing room reads; LEFT members must
+explicitly call join, which still enforces lock, capacity, and expiration.
+No internal identifiers, credentials, messages, or other participants are returned.
+An empty list is `{ "rooms": [] }`. Standard authentication errors apply.
+
 ## Create room (existing)
 
 `POST /api/v1/rooms` returns `201 Created`. The body contains a required `vibe`

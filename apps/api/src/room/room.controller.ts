@@ -29,6 +29,12 @@ export class RoomController {
     return this.roomService.createRoom(identity.id, dto);
   }
 
+  @Get()
+  @Header('Cache-Control', 'no-store')
+  listRooms(@CurrentIdentity() identity: AuthenticatedIdentity) {
+    return this.roomService.listRooms(identity.id);
+  }
+
   @Get(':code')
   @Header('Cache-Control', 'no-store')
   getRoom(

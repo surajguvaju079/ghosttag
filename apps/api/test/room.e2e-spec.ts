@@ -27,6 +27,13 @@ describe('Room membership HTTP + PostgreSQL integration', () => {
   let member: { token: string; identityId: string };
   let code: string;
   let roomId: string;
+  type RoomList = {
+    rooms: {
+      code: string;
+      membershipStatus: string;
+      lockedUntil: string | null;
+    }[];
+  };
   let databaseCreated = false;
   const databaseName = `ghosttag_test_${randomUUID().replaceAll('-', '')}`;
 
@@ -142,6 +149,92 @@ describe('Room membership HTTP + PostgreSQL integration', () => {
       })),
     });
   }
+
+  it('lists current and left rooms privately, including locks but excluding expiry', async () => {
+    await request(app.getHttpServer()).get('/api/v1/rooms').expect(401);
+    await request(app.getHttpServer())
+      .get('/api/v1/rooms')
+      .auth(member.token, { type: 'bearer' })
+      .expect(200, { rooms: [] });
+    await post('join').expect(200);
+    const list = () =>
+      request(app.getHttpServer())
+        .get('/api/v1/rooms')
+        .auth(member.token, { type: 'bearer' });
+    const before = await membership();
+    const active = await list().expect(200).expect('Cache-Control', 'no-store');
+    expect(active.body).toEqual({
+      rooms: [
+        {
+          code,
+          name: 'Test room',
+          vibe: 'DEEP_TALK',
+          expiresAt: expect.any(String) as string,
+          lockedUntil: null,
+          membershipStatus: 'ACTIVE',
+        },
+      ],
+    });
+    expect(await membership()).toEqual(before);
+    await post('leave').expect(204);
+    expect(((await list()).body as RoomList).rooms[0].membershipStatus).toBe(
+      'LEFT',
+    );
+    const lockedUntil = new Date(Date.now() + 60_000);
+    await prisma.room.update({ where: { id: roomId }, data: { lockedUntil } });
+    expect(((await list()).body as RoomList).rooms[0].lockedUntil).toBe(
+      lockedUntil.toISOString(),
+    );
+    expect(
+      (
+        (
+          await request(app.getHttpServer())
+            .get('/api/v1/rooms')
+            .auth(owner.token, { type: 'bearer' })
+        ).body as RoomList
+      ).rooms[0].membershipStatus,
+    ).toBe('ACTIVE');
+    await prisma.room.update({
+      where: { id: roomId },
+      data: { expiresAt: new Date() },
+    });
+    await list().expect(200, { rooms: [] });
+    await prisma.room.update({
+      where: { id: roomId },
+      data: { expiresAt: new Date(Date.now() + 60_000), status: 'EXPIRED' },
+    });
+    await list().expect(200, { rooms: [] });
+  });
+
+  it('orders room summaries by original join time and public code', async () => {
+    const created = await request(app.getHttpServer())
+      .post('/api/v1/rooms')
+      .auth(owner.token, { type: 'bearer' })
+      .send({ vibe: 'CHAOS' })
+      .expect(201);
+    const otherCode = (created.body as { code: string }).code;
+    const other = await prisma.room.findUniqueOrThrow({
+      where: { code: otherCode },
+    });
+    const sameTime = new Date('2026-01-01T00:00:00Z');
+    await prisma.roomMembership.updateMany({
+      where: { userId: owner.identityId },
+      data: { joinedAt: sameTime },
+    });
+    const list = () =>
+      request(app.getHttpServer())
+        .get('/api/v1/rooms')
+        .auth(owner.token, { type: 'bearer' });
+    const tied = await list().expect(200);
+    expect(
+      (tied.body as RoomList).rooms.map((item: { code: string }) => item.code),
+    ).toEqual([code, otherCode].sort());
+    await prisma.roomMembership.updateMany({
+      where: { roomId: other.id },
+      data: { joinedAt: new Date() },
+    });
+    expect(((await list()).body as RoomList).rooms[0].code).toBe(otherCode);
+  });
 
   it('creates an ACTIVE OWNER with a 24 hour room lifetime', async () => {
     const room = await prisma.room.findUniqueOrThrow({ where: { id: roomId } });

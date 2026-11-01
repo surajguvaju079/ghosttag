@@ -24,7 +24,13 @@ const stars = [
   { x: 43, y: 3, size: 2 },
   { x: 81, y: 78, size: 3 },
 ];
-export function BrandScreen({ children }: { children: ReactNode }) {
+export function BrandScreen({
+  children,
+  bottomInset = true,
+}: {
+  children: ReactNode;
+  bottomInset?: boolean;
+}) {
   return (
     <View style={brandStyles.root}>
       <View
@@ -71,7 +77,12 @@ export function BrandScreen({ children }: { children: ReactNode }) {
           />
         </View>
       </View>
-      <Screen style={{ backgroundColor: "transparent" }}>{children}</Screen>
+      <Screen
+        bottomInset={bottomInset}
+        style={{ backgroundColor: "transparent" }}
+      >
+        {children}
+      </Screen>
     </View>
   );
 }

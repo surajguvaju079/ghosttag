@@ -10,14 +10,14 @@ import {
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { brand, BrandMark, BrandScreen } from "../ui/brand";
+import { brand, BrandMark, BrandScreen } from "../../ui/brand";
 import { useRouter } from "expo-router";
-import { useSession } from "../auth/provider";
-import { browserPreview } from "../auth/credential-store";
-import { ApiError, asApiError, friendlyError } from "../api/client";
-import type { Vibe } from "../api/contracts";
-import { vibes } from "../rooms/vibes";
-import { Banner, Text } from "../ui/primitives";
+import { useSession } from "../../auth/provider";
+import { browserPreview } from "../../auth/credential-store";
+import { ApiError, asApiError, friendlyError } from "../../api/client";
+import type { Vibe } from "../../api/contracts";
+import { vibes } from "../../rooms/vibes";
+import { Banner, Text } from "../../ui/primitives";
 export default function Home() {
   const { api, token } = useSession();
   const router = useRouter();
@@ -48,7 +48,7 @@ export default function Home() {
         mode === "create"
           ? await api.createRoom(token, vibe, name)
           : await api.joinRoom(token, code);
-      router.push({ pathname: "./room/[code]", params: { code: publicCode } });
+      router.push({ pathname: "/room/[code]", params: { code: publicCode } });
     } catch (failure) {
       setError(failure);
       setRetryAt((current) => ({
@@ -60,7 +60,7 @@ export default function Home() {
     }
   }
   return (
-    <BrandScreen>
+    <BrandScreen bottomInset={false}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -241,7 +241,7 @@ export default function Home() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Safety and privacy"
-            onPress={() => router.push("./safety")}
+            onPress={() => router.navigate("/safety")}
             style={{
               minHeight: 48,
               justifyContent: "center",

@@ -261,3 +261,34 @@ Existing Metro instances must be restarted after dependency updates. This record
 is a snapshot; rerun checks after changing configuration or dependencies. Temporary
 verification services are stopped after validation; use the commands above to
 start your acceptance session. No staging or production environment was modified.
+
+## Returning rooms, tabs, keyboard, and sharing
+
+- With one native identity, create a room, join another, explicitly leave one,
+  terminate and reopen the app. My Rooms must restore Current rooms and Previously
+  left; Open must preserve membership and Rejoin must use existing capacity rules.
+- Verify refresh after returning from chat, pull-to-refresh, offline/retry, room
+  expiration while the list is open, locked-room feedback, and Start fresh clearing
+  the prior identity's list. Browser reload intentionally starts a new identity.
+- Verify Home/My Rooms/Safety tabs, chat outside tabs, Back returning to the source
+  tab, direct room entry fallback, and Leave returning to My Rooms.
+- On small Android and iOS screens, open/dismiss the keyboard, type a multiline draft
+  beyond 130 points, and confirm the cursor, typed text and Send remain visible.
+  Repeat with pending sends and error banners. Confirm latest messages stay visible
+  when near the bottom, while older-message reading position is preserved.
+- Copy from a room card and chat header, paste into another app, and confirm only
+  the code was copied. Share and cancel the share sheet; verify invite text and
+  browser clipboard/Web Share fallback. Check font scaling and screen-reader labels.
+
+These checks require native devices/simulators; bundle exports and controller tests
+alone do not establish acceptance.
+
+A repeatable browser smoke script is available at
+`apps/mobile/test/joined-rooms.browser.txt`. Export the app, serve
+`apps/mobile/dist` at `http://127.0.0.1:8091/`, open a Chromium Playwright CLI
+session, and run `playwright cli run-code --filename
+apps/mobile/test/joined-rooms.browser.txt`. It uses mocked API responses and browser
+clipboard permissions to verify tabs, current/left sections, expiry filtering,
+locked entry, copying, Open/back and Rejoin/back. Room access is intentionally
+mocked as 423 to avoid a live socket/backend; those resource errors are expected.
+This does not verify native keyboard or sharing behavior.

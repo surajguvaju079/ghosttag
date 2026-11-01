@@ -36,6 +36,7 @@ describe('RoomService', () => {
     },
   };
   const prisma = {
+    roomMembership: tx.roomMembership,
     $transaction: jest.fn((work: (client: typeof tx) => unknown) => work(tx)),
   };
   const service = new RoomService(prisma as unknown as PrismaService);
@@ -51,6 +52,45 @@ describe('RoomService', () => {
       role: 'MEMBER',
     });
     tx.roomMembership.update.mockResolvedValue(membership);
+  });
+
+  it('lists only public room summaries for the authenticated identity', async () => {
+    const publicRoom = {
+      code: room.code,
+      name: room.name,
+      vibe: room.vibe,
+      expiresAt: room.expiresAt,
+      lockedUntil: room.lockedUntil,
+    };
+    tx.roomMembership.findMany.mockResolvedValue([
+      { room: publicRoom, status: 'ACTIVE' },
+      { room: { ...publicRoom, code: 'GH-5678' }, status: 'LEFT' },
+    ]);
+    const result = await service.listRooms(membership.userId);
+    expect(result.rooms).toEqual([
+      { ...publicRoom, membershipStatus: 'ACTIVE' },
+      { ...publicRoom, code: 'GH-5678', membershipStatus: 'LEFT' },
+    ]);
+    expect(tx.roomMembership.findMany).toHaveBeenCalledWith({
+      where: {
+        userId: membership.userId,
+        room: { status: 'ACTIVE', expiresAt: { gt: expect.any(Date) as Date } },
+      },
+      orderBy: [{ joinedAt: 'desc' }, { room: { code: 'asc' } }],
+      select: {
+        status: true,
+        room: {
+          select: {
+            code: true,
+            name: true,
+            vibe: true,
+            expiresAt: true,
+            lockedUntil: true,
+          },
+        },
+      },
+    });
+    expect(tx.roomMembership.update).not.toHaveBeenCalled();
   });
 
   it('creates a room and its OWNER membership atomically', async () => {

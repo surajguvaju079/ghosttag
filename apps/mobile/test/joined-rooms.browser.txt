@@ -1,0 +1,51 @@
+async (page) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const until = new Date(Date.now() + 3600000).toISOString();
+  let joins = 0;
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.unroute('**/api/v1/**');
+  await page.route('**/api/v1/**', async route => {
+    const path = route.request().url().split("?")[0];
+    let status = 200;
+    let body = {};
+    if (path.endsWith('/identity')) body = { token: 'smoke-only-token' };
+    else if (path.endsWith('/identity/me')) body = {};
+    else if (path.endsWith('/rooms')) body = { rooms: [
+      { code: 'GH-1234', name: 'Current moment', vibe: 'CHAOS', expiresAt: until, lockedUntil: null, membershipStatus: 'ACTIVE' },
+      { code: 'GH-5678', name: 'Past moment', vibe: 'DEEP_TALK', expiresAt: until, lockedUntil: null, membershipStatus: joins ? 'ACTIVE' : 'LEFT' },
+      { code: 'GH-9012', name: 'Locked moment', vibe: 'RANT_ZONE', expiresAt: until, lockedUntil: until, membershipStatus: 'ACTIVE' },
+      { code: 'GH-3456', name: 'Expired moment', vibe: 'CHAOS', expiresAt: new Date(Date.now() - 5000).toISOString(), lockedUntil: null, membershipStatus: 'ACTIVE' }
+    ] };
+    else if (path.endsWith('/join')) { joins++; body = {}; }
+    else { status = 423; body = { code: 'ROOM_LOCKED' }; }
+    await route.fulfill({ status, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' }, body: JSON.stringify(body) });
+  });
+  await page.goto('http://127.0.0.1:8091/');
+  await page.getByRole('tab', { name: /My Rooms/ }).click();
+  await page.getByText('Current moment', { exact: true }).waitFor();
+  await page.getByText('Previously left', { exact: false }).waitFor();
+  if (await page.getByText('Expired moment', { exact: true }).count()) throw Error('Expired room displayed');
+  if (!(await page.getByRole('button', { name: 'Temporarily locked', exact: true }).isDisabled())) throw Error('Locked room entry enabled');
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await page.getByRole('button', { name: 'Copy code', exact: true }).first().click();
+  await page.getByText('Room code copied', { exact: true }).waitFor();
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  if (copied !== 'GH-1234') throw Error('Wrong clipboard content');
+  await page.getByRole('button', { name: 'Open', exact: true }).click();
+  await page.getByRole('button', { name: 'Back, keep room membership', exact: true }).waitFor();
+  if (await page.getByRole('tab', { name: /My Rooms/ }).count()) throw Error('Tabs visible in chat');
+  await page.getByRole('button', { name: 'Back, keep room membership', exact: true }).click({ force: true });
+  await page.getByRole('tab', { name: /My Rooms/ }).waitFor({ state: 'visible' });
+  await page.getByRole('button', { name: 'Rejoin', exact: true }).click();
+  await page.getByRole('button', { name: 'Back, keep room membership', exact: true }).waitFor();
+  if (joins !== 1) throw Error('Rejoin did not use join endpoint exactly once');
+  await page.getByRole('button', { name: 'Back, keep room membership', exact: true }).click({ force: true });
+  await page.getByRole('tab', { name: /My Rooms/ }).waitFor({ state: 'visible' });
+  await page.getByRole('tab', { name: /Safety/ }).click();
+  await page.getByText('Safety & privacy', { exact: true }).last().waitFor();
+  await page.getByRole('tab', { name: /Home/ }).click();
+  await page.getByRole('button', { name: 'Create Room', exact: true }).waitFor();
+  if (errors.length) throw Error(errors.join('\n'));
+  console.log('PASS: tabs, room groups, expiry, lock, copy, Open/back, Rejoin/back, Safety/Home; no browser exceptions.');
+}

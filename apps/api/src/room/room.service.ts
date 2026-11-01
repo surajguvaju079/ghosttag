@@ -168,6 +168,34 @@ export class RoomService {
     }
   }
 
+  async listRooms(userId: string) {
+    const memberships = await this.prisma.roomMembership.findMany({
+      where: {
+        userId,
+        room: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
+      },
+      orderBy: [{ joinedAt: 'desc' }, { room: { code: 'asc' } }],
+      select: {
+        status: true,
+        room: {
+          select: {
+            code: true,
+            name: true,
+            vibe: true,
+            expiresAt: true,
+            lockedUntil: true,
+          },
+        },
+      },
+    });
+    return {
+      rooms: memberships.map(({ room, status }) => ({
+        ...room,
+        membershipStatus: status,
+      })),
+    };
+  }
+
   async getRoom(userId: string, code: string) {
     return this.readAsActiveMember(
       userId,

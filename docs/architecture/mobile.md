@@ -1,7 +1,8 @@
 # Expo mobile MVP
 
-The mobile app consumes the existing REST and Socket.IO contracts without changing
-the backend, database schema or authorization model. It uses Expo Router, React
+The mobile app consumes REST and Socket.IO contracts. The My Rooms milestone
+adds an authenticated room-list REST endpoint without changing the database schema
+or chat authorization model. It uses Expo Router, React
 context for the anonymous session, and a room-local external store with
 `useSyncExternalStore`. No global state-management dependency is needed. Existing
 shared packages contain no implemented public contract types; mobile projections
@@ -141,3 +142,34 @@ human-owned contract/privacy decisions recorded in the
 [release gates](../release/google-play/release-checklist.md). No server API/schema
 changes were invented to resolve these decisions. Legal drafts are not published
 policy. The existing 24-hour room lifecycle and public identity model remain intact.
+
+## Returning rooms and navigation
+
+Home, My Rooms, and Safety are bottom tabs. Home remains the launch screen and
+contains create/join. Chat stays in the root stack above the tabs. Back preserves
+membership and returns to the originating tab; direct room entry falls back to
+My Rooms. Confirmed Leave returns to My Rooms, with that unexpired room under
+Previously left. The former starter Explore route redirects to My Rooms.
+
+My Rooms reads `GET /rooms` for the current credential. Current and previously
+left memberships appear in separate sections, with Open and Rejoin actions.
+Locked rooms stay visible with entry disabled until unlock. Expired rooms disappear
+from the visible list. The list refreshes on focus, foreground and pull-to-refresh;
+errors preserve existing results and offer retry. Each controller belongs to one
+credential; obsolete requests are ignored after blur/session replacement. No room
+history is persisted on the device. Existing native credentials restore memberships
+across restarts, including memberships predating this UI. Start fresh does not
+restore prior memberships, and browser preview remains memory-only.
+
+Chat keyboard avoidance wraps safe-area content, with iOS padding and Android's
+configured window resize. The list can shrink; composer text grows up to 130 points
+and scrolls internally afterward. Secondary header details and sharing controls
+hide while typing, and pending rows shrink to preserve composer space. Layout
+changes follow the latest message only when already near the latest messages.
+Native keyboard and cursor behavior still require device acceptance checks.
+
+Room cards and chat headers offer Copy code via SDK-compatible `expo-clipboard`
+and Share via the native share sheet. Browser sharing uses the Web Share API where
+available and otherwise directs the user to Copy code. Only public room codes and
+entry instructions are shared, with feedback on copy success or action failure.
+No invite-link/deep-link contract or durable message/draft storage was added.

@@ -10,6 +10,7 @@ import {
   AppState,
   FlatList,
   KeyboardAvoidingView,
+  Keyboard,
   Modal,
   Platform,
   Pressable,
@@ -26,6 +27,7 @@ import {
   type Message,
   type ReportReason,
 } from "../../api/contracts";
+import { RoomShare } from "../../components/room-share";
 import { RoomSession } from "../../rooms/room-session";
 import { socketTransport } from "../../messaging/transport";
 import { validText } from "../../messaging/history";
@@ -82,6 +84,22 @@ function RoomScreen({ code }: { code: string }) {
   );
   const [now, setNow] = useState(() => Date.now());
   const [draft, setDraft] = useState("");
+  const [inputHeight, setInputHeight] = useState(52);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      () => setKeyboardVisible(true),
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setKeyboardVisible(false),
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
   const [modal, setModal] = useState<"members" | "leave" | "report" | null>(
     null,
   );
@@ -162,16 +180,27 @@ function RoomScreen({ code }: { code: string }) {
     } else if (!["blocked", "expired"].includes(controller.state.status))
       setDraft((current) => current || text);
   }
+  function backToRooms() {
+    if (router.canGoBack()) router.back();
+    else router.replace("/my-rooms");
+  }
   return (
-    <Screen>
-      <KeyboardAvoidingView
-        style={{ flex: 1, width: "100%", maxWidth: 800, alignSelf: "center" }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: palette.bg }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <Screen
+        style={{
+          minHeight: 0,
+          width: "100%",
+          maxWidth: 800,
+          alignSelf: "center",
+        }}
       >
         <View
           style={{
-            padding: 20,
-            gap: 16,
+            padding: keyboardVisible ? 8 : 20,
+            gap: keyboardVisible ? 4 : 16,
             borderBottomWidth: 1,
             borderColor: palette.line,
           }}
@@ -179,9 +208,13 @@ function RoomScreen({ code }: { code: string }) {
           <View style={[styles.row, { justifyContent: "space-between" }]}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Back to home, keep room membership"
-              onPress={() => router.replace("/")}
-              style={{ minWidth: 44, minHeight: 44, justifyContent: "center" }}
+              accessibilityLabel="Back, keep room membership"
+              onPress={backToRooms}
+              style={{
+                minWidth: 44,
+                minHeight: 44,
+                justifyContent: "center",
+              }}
             >
               <Text style={{ fontSize: 25 }}>←</Text>
             </Pressable>
@@ -207,34 +240,41 @@ function RoomScreen({ code }: { code: string }) {
               </Text>
             </Pressable>
           </View>
-          <View style={[styles.row, { justifyContent: "space-between" }]}>
-            <View style={{ flex: 1, gap: 4 }}>
-              <Text
-                numberOfLines={2}
-                style={{ fontSize: 24, fontWeight: "800", letterSpacing: -0.7 }}
-              >
-                {state.details?.room.name ||
-                  vibeLabel(state.details?.room.vibe)}
-              </Text>
-              <Text style={styles.caption}>
-                {vibeLabel(state.details?.room.vibe)} ·{" "}
-                {state.status === "expired"
-                  ? "Ended"
-                  : expires
-                    ? `${countdown} left`
-                    : "Temporary by design"}
-              </Text>
+          {!keyboardVisible && <RoomShare code={code} />}
+          {!keyboardVisible && (
+            <View style={[styles.row, { justifyContent: "space-between" }]}>
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text
+                  numberOfLines={2}
+                  style={{
+                    fontSize: 24,
+                    fontWeight: "800",
+                    letterSpacing: -0.7,
+                  }}
+                >
+                  {state.details?.room.name ||
+                    vibeLabel(state.details?.room.vibe)}
+                </Text>
+                <Text style={styles.caption}>
+                  {vibeLabel(state.details?.room.vibe)} ·{" "}
+                  {state.status === "expired"
+                    ? "Ended"
+                    : expires
+                      ? `${countdown} left`
+                      : "Temporary by design"}
+                </Text>
+              </View>
+              <Button
+                label={`👻 ${state.members?.total ?? "—"}/${state.details?.room.maxCapacity ?? 50}`}
+                secondary
+                disabled={!ready}
+                onPress={() => {
+                  setModal("members");
+                  void controller.refreshMembers();
+                }}
+              />
             </View>
-            <Button
-              label={`👻 ${state.members?.total ?? "—"}/${state.details?.room.maxCapacity ?? 50}`}
-              secondary
-              disabled={!ready}
-              onPress={() => {
-                setModal("members");
-                void controller.refreshMembers();
-              }}
-            />
-          </View>
+          )}
           <View style={styles.row}>
             <View
               style={{
@@ -287,6 +327,14 @@ function RoomScreen({ code }: { code: string }) {
           </View>
         )}
         <FlatList
+          style={{ flex: 1, minHeight: 0 }}
+          onLayout={() => {
+            if (nearLatest)
+              list.current?.scrollToOffset({ offset: 0, animated: false });
+          }}
+          keyboardDismissMode={
+            Platform.OS === "ios" ? "interactive" : "on-drag"
+          }
           ref={list}
           data={state.messages}
           inverted
@@ -361,7 +409,10 @@ function RoomScreen({ code }: { code: string }) {
                   <Text
                     style={[
                       styles.caption,
-                      { color: own ? "#B99AFF" : palette.muted, flexShrink: 1 },
+                      {
+                        color: own ? "#B99AFF" : palette.muted,
+                        flexShrink: 1,
+                      },
                     ]}
                   >
                     {item.author.ghostName}
@@ -434,7 +485,7 @@ function RoomScreen({ code }: { code: string }) {
         )}
         {state.pending.length > 0 && (
           <ScrollView
-            style={{ maxHeight: 140 }}
+            style={{ maxHeight: keyboardVisible ? 80 : 140, flexShrink: 1 }}
             contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}
           >
             {state.pending.map((item) => (
@@ -483,6 +534,16 @@ function RoomScreen({ code }: { code: string }) {
               accessibilityLabel="Message"
               value={draft}
               onChangeText={setDraft}
+              onContentSizeChange={(event) =>
+                setInputHeight(
+                  Math.min(
+                    130,
+                    Math.max(52, event.nativeEvent.contentSize.height),
+                  ),
+                )
+              }
+              scrollEnabled
+              textAlignVertical="top"
               placeholder={
                 ready ? "Say something real…" : "Waiting for your room…"
               }
@@ -492,7 +553,13 @@ function RoomScreen({ code }: { code: string }) {
               maxLength={2000}
               style={[
                 styles.input,
-                { flex: 1, maxHeight: 130, minHeight: 52, paddingTop: 15 },
+                {
+                  flex: 1,
+                  height: draft ? inputHeight : 52,
+                  maxHeight: 130,
+                  minHeight: 52,
+                  paddingTop: 15,
+                },
               ]}
             />
             <Button
@@ -566,7 +633,7 @@ function RoomScreen({ code }: { code: string }) {
                       void controller
                         .leave()
                         .then((left) => {
-                          if (left) router.replace("/");
+                          if (left) router.dismissTo("/my-rooms");
                           else setModal(null);
                         })
                         .finally(() => setWorking(false));
@@ -647,7 +714,7 @@ function RoomScreen({ code }: { code: string }) {
             </View>
           </View>
         </Modal>
-      </KeyboardAvoidingView>
-    </Screen>
+      </Screen>
+    </KeyboardAvoidingView>
   );
 }

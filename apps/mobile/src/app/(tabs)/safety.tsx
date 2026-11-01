@@ -1,11 +1,9 @@
 import { useState } from "react";
 import { Linking, ScrollView, View } from "react-native";
-import { useRouter } from "expo-router";
-import { Banner, Button, Screen, Text, styles } from "../ui/primitives";
-import { publicHttps } from "../api/release-policy";
+import { Banner, Button, Screen, Text, styles } from "../../ui/primitives";
+import { publicHttps } from "../../api/release-policy";
 
 export default function Safety() {
-  const router = useRouter();
   const [error, setError] = useState(false);
   const policies = [
     ["Privacy policy", process.env.EXPO_PUBLIC_PRIVACY_URL],
@@ -22,7 +20,7 @@ export default function Safety() {
     }
   }
   return (
-    <Screen>
+    <Screen bottomInset={false}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Safety & privacy</Text>
         <Text style={styles.muted}>
@@ -73,7 +71,6 @@ export default function Safety() {
             This policy link is unavailable. Please try again later.
           </Banner>
         )}
-        <Button label="Back" secondary onPress={() => router.back()} />
       </ScrollView>
     </Screen>
   );

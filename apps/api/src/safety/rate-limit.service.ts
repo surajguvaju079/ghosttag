@@ -4,6 +4,7 @@ import { createHmac, randomBytes } from 'node:crypto';
 import { isIP } from 'node:net';
 
 export const defaultPolicies = {
+  AGE_ASSESSMENT: { network: 30, identity: 5, windowMs: 3_600_000 },
   IDENTITY_CREATE: { network: 10, identity: 0, windowMs: 3_600_000 },
   ROOM_CREATE: { network: 30, identity: 10, windowMs: 3_600_000 },
   ROOM_JOIN: { network: 120, identity: 30, windowMs: 60_000 },

@@ -2,6 +2,8 @@
 
 All endpoints require `Authorization: Bearer <anonymous-identity-token>`.
 Authentication establishes the user; clients cannot supply internal user IDs.
+Every endpoint also requires current 18+ eligibility and enabled social access.
+See [age eligibility](age-eligibility.md) for the additional 403/503 errors.
 Room codes are public identifiers, trimmed and converted to uppercase before lookup.
 
 ## My rooms

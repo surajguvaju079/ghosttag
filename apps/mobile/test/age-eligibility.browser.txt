@@ -1,0 +1,64 @@
+async (page) => {
+  let status = 'REQUIRED', social = false, denied = false;
+  let roomRequests = 0, assessments = 0;
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const identityStatus = () => ({
+    ageEligibility: { status, policyVersion: '18-plus-v1', method: status === 'REQUIRED' ? null : 'DECLARED_DOB', assessedAt: status === 'REQUIRED' ? null : '2026-11-01T00:00:00.000Z' },
+    socialAccessEnabled: social
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.unroute('**/api/v1/**');
+  await page.route('**/api/v1/**', async route => {
+    const path = route.request().url().split('?')[0];
+    let body, code = 200;
+    if (path.endsWith('/identity')) body = { token: 'age-smoke-token' };
+    else if (path.endsWith('/identity/me')) body = identityStatus();
+    else if (path.endsWith('/identity/age-eligibility')) {
+      assessments++;
+      const submitted = route.request().postDataJSON();
+      status = submitted.dateOfBirth === '2000-01-01' ? 'ELIGIBLE' : 'INELIGIBLE';
+      body = identityStatus();
+    } else {
+      roomRequests++;
+      if (denied) { code = 403; body = { code: 'AGE_INELIGIBLE' }; }
+      else body = { rooms: [] };
+    }
+    await route.fulfill({ status: code, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(body) });
+  });
+  // Direct room navigation must not mount chat or request room content before screening.
+  await page.goto('http://127.0.0.1:8091/room/GH-1234');
+  const birthday = page.getByRole('textbox', { name: 'Date of birth', exact: true });
+  await birthday.waitFor();
+  if (await birthday.inputValue()) throw Error('Birthday must not have a default');
+  if (!(await page.getByRole('button', { name: 'Continue', exact: true }).isDisabled())) throw Error('Empty birthday accepted');
+  if (roomRequests || await page.getByRole('tab').count()) throw Error('Social routes mounted before screening');
+  await page.getByRole('button', { name: 'Safety & privacy', exact: true }).click();
+  await page.getByText('AGE ELIGIBILITY', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await birthday.fill('2020-01-01');
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByText('GhostTag isn’t available', { exact: true }).waitFor();
+  if (await page.getByRole('textbox').count() || await page.getByRole('button', { name: 'Start fresh', exact: true }).count()) throw Error('Ineligible identity offered bypass controls');
+  if (roomRequests) throw Error('Ineligible identity requested room content');
+
+  status = 'REQUIRED';
+  await page.goto('http://127.0.0.1:8091/');
+  await birthday.fill('2000-01-01');
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByText('A little more time', { exact: true }).waitFor();
+  if (await page.getByRole('tab').count()) throw Error('Disabled rollout exposed social UI');
+  social = true;
+  await page.getByRole('button', { name: 'Check availability', exact: true }).click();
+  await page.getByRole('tab', { name: /My Rooms/ }).waitFor();
+  await page.getByRole('tab', { name: /My Rooms/ }).click();
+  await page.getByText('No open rooms yet.', { exact: true }).waitFor();
+  await page.getByRole('tab', { name: /Home/ }).click();
+  denied = true;
+  await page.getByRole('tab', { name: /My Rooms/ }).click();
+  await page.getByText('GhostTag isn’t available', { exact: true }).waitFor();
+  if (await page.getByRole('tab').count()) throw Error('REST denial did not unmount social UI');
+  if (assessments !== 2) throw Error('Unexpected assessment requests');
+  if (errors.length) throw Error(errors.join('\n'));
+  return 'PASS: neutral screening, direct-link gating, safety access, denial, disabled rollout, enablement and REST invalidation';
+}

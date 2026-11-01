@@ -1,3 +1,4 @@
+import { SocialAccessGuard } from 'src/common/auth/social-access.guard';
 import { RateLimit } from 'src/safety/rate-limit.guard';
 import {
   Body,
@@ -16,7 +17,7 @@ import { RoomService } from './room.service';
 import { CurrentIdentity } from 'src/common/decorators/current-identity.decorator';
 
 @Controller('rooms')
-@UseGuards(AnonymousIdentityGuard)
+@UseGuards(AnonymousIdentityGuard, SocialAccessGuard)
 export class RoomController {
   constructor(private readonly roomService: RoomService) {}
 

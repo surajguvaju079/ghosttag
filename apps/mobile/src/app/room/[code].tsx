@@ -21,7 +21,7 @@ import {
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { randomUUID } from "expo-crypto";
 import { useSession } from "../../auth/provider";
-import { friendlyError, normalizeCode } from "../../api/client";
+import { ApiError, friendlyError, normalizeCode } from "../../api/client";
 import {
   REPORT_REASONS,
   type Message,
@@ -74,6 +74,7 @@ function RoomScreen({ code }: { code: string }) {
         () => socketTransport(socketUrl, token),
         randomUUID,
         session.invalidate,
+        (failure) => session.rejectAccess(token, new ApiError(failure)),
       ),
     [api, token, code, socketUrl, session],
   );

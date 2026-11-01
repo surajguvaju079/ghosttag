@@ -173,3 +173,14 @@ and Share via the native share sheet. Browser sharing uses the Web Share API whe
 available and otherwise directs the user to Copy code. Only public room codes and
 entry instructions are shared, with feedback on copy success or action failure.
 No invite-link/deep-link contract or durable message/draft storage was added.
+
+## App-wide age eligibility
+
+Session bootstrap and foreground validation now use the additive identity-status
+contract. New and existing identities must complete neutral birthday screening before
+social routes mount. Declared eligibility does not verify age. Ineligible identities
+have no immediate birthday retry or Start fresh button; eligible identities see an
+unavailable screen while SOCIAL_ACCESS_ENABLED is false. Safety content is available
+inside the gate without social access. REST/socket screening failures preserve the
+credential and clear chat. See [age eligibility](age-eligibility.md) for storage,
+locking, error handling and deployment details. Public rollout remains disabled.

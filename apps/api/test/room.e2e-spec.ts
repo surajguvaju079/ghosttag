@@ -1,3 +1,7 @@
+import { AgeEligibilityService } from '../src/identity/age-eligibility.service';
+import { AgeEligibilityRepository } from '../src/identity/age-eligibility.repository';
+import { SocialAccessGuard } from '../src/common/auth/social-access.guard';
+import { AGE_POLICY_VERSION } from '../src/identity/age-eligibility.service';
 import { ConfigService } from '@nestjs/config';
 import { RateLimitService } from '../src/safety/rate-limit.service';
 import { RateLimitGuard } from '../src/safety/rate-limit.guard';
@@ -38,6 +42,8 @@ describe('Room membership HTTP + PostgreSQL integration', () => {
   const databaseName = `ghosttag_test_${randomUUID().replaceAll('-', '')}`;
 
   beforeAll(async () => {
+    process.env.SOCIAL_ACCESS_ENABLED = 'true';
+    process.env.AGE_POLICY_VERSION = AGE_POLICY_VERSION;
     await ConfigModule.forRoot({ envFilePath: '.env' });
     const sourceUrl = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
     if (!sourceUrl)
@@ -64,6 +70,13 @@ describe('Room membership HTTP + PostgreSQL integration', () => {
       controllers: [RoomController],
       providers: [
         RoomService,
+        AgeEligibilityService,
+        AgeEligibilityRepository,
+        SocialAccessGuard,
+        {
+          provide: ConfigService,
+          useValue: new ConfigService({ SOCIAL_ACCESS_ENABLED: 'true' }),
+        },
         RateLimitGuard,
         {
           provide: RateLimitService,
@@ -91,9 +104,21 @@ describe('Room membership HTTP + PostgreSQL integration', () => {
     identities = module.get(IdentityService);
   }, 60_000);
 
+  async function createEligibleIdentity() {
+    const identity = await identities.createIdentity();
+    await prisma.ageEligibility.create({
+      data: {
+        userId: identity.identityId,
+        result: 'ELIGIBLE',
+        policyVersion: AGE_POLICY_VERSION,
+      },
+    });
+    return identity;
+  }
+
   beforeEach(async () => {
-    owner = await identities.createIdentity();
-    member = await identities.createIdentity();
+    owner = await createEligibleIdentity();
+    member = await createEligibleIdentity();
     const response = await request(app.getHttpServer())
       .post('/api/v1/rooms')
       .auth(owner.token, { type: 'bearer' })
@@ -417,7 +442,7 @@ describe('Room membership HTTP + PostgreSQL integration', () => {
   it('serializes competing joins for the final slot and permits duplicates at capacity', async () => {
     await fillTo49();
     const contenders = await Promise.all(
-      Array.from({ length: 10 }, () => identities.createIdentity()),
+      Array.from({ length: 10 }, () => createEligibleIdentity()),
     );
     const results = await Promise.all(
       contenders.map((identity) => post('join', identity.token)),

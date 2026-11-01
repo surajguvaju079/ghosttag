@@ -25,6 +25,17 @@ not broadcast. Credential hashes, internal identity links and report metadata ar
 accessible to authorized infrastructure operators, not ordinary room participants.
 This app is not end-to-end encrypted. Other users can copy content.
 
+## Age screening
+
+GhostTag's approved audience is 18+. A birthday is sent to the server transiently to
+calculate eligibility; it is not stored or returned. The server retains the result,
+DECLARED_DOB method, assessment time and policy version linked to the anonymous
+identity. These are private and do not expire with rooms. A changed policy replaces
+the previous assessment; changing local identity does not delete its server data.
+This is declared screening, not proof of age. Public social access is disabled
+pending launch-country/assurance decisions and existing release gates. Confirm that
+proxies, analytics and diagnostics also avoid request-body capture before launch.
+
 ## Retention actually implemented
 
 Rooms become inaccessible at expiresAt (normally 24 hours after creation). A bounded

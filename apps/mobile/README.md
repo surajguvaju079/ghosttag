@@ -140,3 +140,13 @@ owner-controlled endpoints in EAS production variables; do not use the .env exam
 for a release. The home screen's Safety & privacy entry describes current behavior;
 terms acceptance, user blocking and identity deletion remain release blockers.
 `pnpm --filter @ghosttag/mobile store:assets` exports the approved-brand Play icon.
+
+### Age screening during development
+
+The backend defaults SOCIAL_ACCESS_ENABLED to false. After applying the age-eligibility
+migration, enable it explicitly only for local/authorized testing. New and existing
+identities must screen before seeing rooms; a declared adult result still shows
+unavailable while the flag is false. Screening does not clear memberships. An older
+backend without eligibility metadata produces an unavailable/error screen. See
+[eligibility architecture](../../docs/architecture/age-eligibility.md). Public launch
+and stronger assurance decisions remain gated.

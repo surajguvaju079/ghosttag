@@ -1,5 +1,7 @@
+import { ageAccessCodes } from "./contracts";
 import type {
   Failure,
+  IdentityStatus,
   JoinedRooms,
   Ghost,
   History,
@@ -70,6 +72,12 @@ export function configuration(
   };
 }
 const messages: Record<string, string> = {
+  INVALID_BIRTH_DATE: "Enter a valid birth date in YYYY-MM-DD format.",
+  ELIGIBILITY_UNAVAILABLE:
+    "Age screening is unavailable. Please try again later.",
+  AGE_SCREENING_REQUIRED: "Complete age screening to continue.",
+  AGE_INELIGIBLE: "GhostTag is not available to this anonymous identity.",
+  SOCIAL_ACCESS_DISABLED: "GhostTag’s social features are not available yet.",
   INVALID_ROOM_CODE: "Enter a room code like GH-4829.",
   ROOM_NOT_FOUND: "This room could not be found. Check the code.",
   ROOM_EXPIRED: "This moment has ended. Create a new room to keep talking.",
@@ -113,6 +121,7 @@ export class ApiClient {
     readonly baseUrl: string,
     private fetcher: typeof fetch = fetch,
     private unauthorized: (token: string) => void = () => {},
+    private accessDenied: (token: string, error: ApiError) => void = () => {},
   ) {}
   async request<T>(
     path: string,
@@ -138,7 +147,7 @@ export class ApiClient {
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         if (response.status === 401 && token) this.unauthorized(token);
-        throw new ApiError({
+        const error = new ApiError({
           statusCode: response.status,
           code: data.code || "REQUEST_FAILED",
           message: "Request failed",
@@ -146,6 +155,9 @@ export class ApiClient {
             data.retryAfterMs ??
             (Number(response.headers.get("Retry-After")) * 1000 || undefined),
         });
+        if (token && ageAccessCodes.includes(error.failure.code))
+          this.accessDenied(token, error);
+        throw error;
       }
       return response.status === 204
         ? (undefined as T)
@@ -167,7 +179,34 @@ export class ApiClient {
     return token;
   }
   async validateIdentity(token: string) {
-    await this.request("/identity/me", token);
+    const result = await this.request<IdentityStatus>("/identity/me", token);
+    return this.identityStatus(result);
+  }
+  assessAge(token: string, dateOfBirth: string) {
+    return this.request<IdentityStatus>(
+      "/identity/age-eligibility",
+      token,
+      { dateOfBirth },
+      "POST",
+    ).then((result) => this.identityStatus(result));
+  }
+  private identityStatus(result: IdentityStatus): IdentityStatus {
+    // An older/malformed backend must never grant access without screening.
+    if (
+      !result?.ageEligibility ||
+      !["REQUIRED", "ELIGIBLE", "INELIGIBLE"].includes(
+        result.ageEligibility.status,
+      ) ||
+      !result.ageEligibility.policyVersion ||
+      typeof result.socialAccessEnabled !== "boolean"
+    ) {
+      throw new ApiError({
+        statusCode: 503,
+        code: "ELIGIBILITY_UNAVAILABLE",
+        message: "Eligibility screening is unavailable.",
+      });
+    }
+    return result;
   }
   async createRoom(token: string, vibe: Vibe, name: string) {
     // Select only public fields; legacy create currently also returns an internal UUID.

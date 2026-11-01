@@ -10,7 +10,9 @@ async (page) => {
     let status = 200;
     let body = {};
     if (path.endsWith('/identity')) body = { token: 'smoke-only-token' };
-    else if (path.endsWith('/identity/me')) body = {};
+    else if (path.endsWith('/identity/me')) body = {
+      ageEligibility: { status: 'ELIGIBLE', method: 'DECLARED_DOB', assessedAt: new Date().toISOString(), policyVersion: '18-plus-v1' }, socialAccessEnabled: true
+    };
     else if (path.endsWith('/rooms')) body = { rooms: [
       { code: 'GH-1234', name: 'Current moment', vibe: 'CHAOS', expiresAt: until, lockedUntil: null, membershipStatus: 'ACTIVE' },
       { code: 'GH-5678', name: 'Past moment', vibe: 'DEEP_TALK', expiresAt: until, lockedUntil: null, membershipStatus: joins ? 'ACTIVE' : 'LEFT' },

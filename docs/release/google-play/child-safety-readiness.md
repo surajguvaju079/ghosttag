@@ -2,8 +2,11 @@
 
 GhostTag is an anonymous social/chat app. Do not assume an adults-only audience,
 text-only content, invite code or internal testing exempts it from child-safety
-responsibilities. The owner has not selected an audience or an age-screening policy.
-No age screen, designated child-safety contact or staffed escalation process exists.
+responsibilities. The approved audience is 18+ throughout the app, using declared
+birthday screening
+and server-enforced eligibility with public social access disabled by default.
+Launch countries and any stronger assurance remain undecided. No designated
+child-safety contact or staffed escalation process exists.
 
 Before rollout, the owner must:
 
@@ -19,8 +22,8 @@ Before rollout, the owner must:
   into tickets, logs or personal storage.
 - Resolve evidence preservation versus short cascading report retention; do not
   silently retain private room content indefinitely or certify an unstaffed process.
-- Select age eligibility and appropriate neutral screening/safeguards, test bypass
-  handling, and make the Play target-audience declarations match actual behavior.
+- Complete launch-country/assurance decisions for the approved 18+ audience, test
+  screening bypass handling, and make Play declarations match actual behavior.
 
 [Google Child Safety Standards](https://support.google.com/googleplay/android-developer/answer/14747720)
 cover published standards, in-app feedback, action on CSAM, legal duties and a

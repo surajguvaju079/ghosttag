@@ -8,12 +8,26 @@ import {
   friendlyError,
   normalizeCode,
 } from "../src/api/client";
-import type { Message, History, RoomDetails } from "../src/api/contracts";
+import type {
+  Message,
+  History,
+  RoomDetails,
+  IdentityStatus,
+} from "../src/api/contracts";
 import { Session, type CredentialStore } from "../src/auth/session";
 import { mergeLive, unique, validText } from "../src/messaging/history";
 import type { Transport } from "../src/messaging/transport";
 import { RoomSession } from "../src/rooms/room-session";
 
+const eligibleStatus: IdentityStatus = {
+  ageEligibility: {
+    status: "ELIGIBLE",
+    method: "DECLARED_DOB",
+    assessedAt: new Date().toISOString(),
+    policyVersion: "18-plus-v1",
+  },
+  socialAccessEnabled: true,
+};
 const failure = (code: string, statusCode = 401, retryAfterMs?: number) =>
   new ApiError({
     code,
@@ -77,6 +91,7 @@ test("identity bootstrap is single-flight and persists one credential across res
     validateIdentity: async (token: string) => {
       assert.equal(token, "secret");
       validations++;
+      return eligibleStatus;
     },
   };
   const session = new Session(disk.store, api);
@@ -90,7 +105,7 @@ test("identity bootstrap is single-flight and persists one credential across res
   assert.equal(session.state.status, "ready");
   await new Session(disk.store, api).bootstrap();
   assert.equal(creates, 1);
-  assert.equal(validations, 1);
+  assert.equal(validations, 2);
 });
 test("network failures keep saved credentials and never create a replacement", async () => {
   const disk = storage("saved");
@@ -122,8 +137,9 @@ for (const code of [
         creates++;
         return "replacement";
       },
-      validateIdentity: async () => {
-        throw failure(code);
+      validateIdentity: async (token: string) => {
+        if (token === "invalid") throw failure(code);
+        return eligibleStatus;
       },
     });
     await session.bootstrap();
@@ -141,8 +157,8 @@ test("invalidation during bootstrap cannot restore a stale credential", async ()
   const session = new Session(storage("secret").store, {
     createIdentity: async () => "unused",
     validateIdentity: () =>
-      new Promise<void>((done) => {
-        resolve = done;
+      new Promise<IdentityStatus>((done) => {
+        resolve = () => done(eligibleStatus);
       }),
   });
   const boot = session.bootstrap();
@@ -184,7 +200,12 @@ test("API uses bearer auth, normalizes codes, discards create UUID and sends exa
   assert.deepEqual(JSON.parse(requests[2].init?.body as string), {
     reason: "HARASSMENT",
   });
-  await api.report("credential", "GH-1234", message(2).messageId, "CHILD_SAFETY");
+  await api.report(
+    "credential",
+    "GH-1234",
+    message(2).messageId,
+    "CHILD_SAFETY",
+  );
   assert.deepEqual(JSON.parse(requests[3].init?.body as string), {
     reason: "CHILD_SAFETY",
   });
@@ -301,6 +322,7 @@ function harness(
 ) {
   let index = 0;
   let invalidations = 0;
+  const socialFailures: string[] = [];
   const sockets: FakeSocket[] = [];
   const historyCalls: (string | undefined)[] = [];
   const reports: unknown[] = [];
@@ -352,6 +374,7 @@ function harness(
     },
     uuid,
     () => invalidations++,
+    (failure) => socialFailures.push(failure.code),
   );
   return {
     controller,
@@ -360,6 +383,7 @@ function harness(
     reports,
     joins,
     invalidations: () => invalidations,
+    socialFailures,
     setReportError: (error?: ApiError) => {
       reportError = error;
     },
@@ -559,7 +583,7 @@ test("a failed secure write retries the same newly-created identity", async () =
       creates++;
       return "one-credential";
     },
-    validateIdentity: async () => {},
+    validateIdentity: async () => eligibleStatus,
   });
   await session.bootstrap();
   assert.equal(session.state.status, "error");
@@ -658,7 +682,7 @@ test("identity bootstrap respects structured rate-limit retry deadlines", async 
       calls++;
       throw failure("RATE_LIMITED", 429, 60000);
     },
-    validateIdentity: async () => {},
+    validateIdentity: async () => eligibleStatus,
   });
   await session.bootstrap();
   await session.bootstrap();
@@ -763,6 +787,7 @@ test("foreground credential validation is single-flight and never replaces a rev
     },
     validateIdentity: async () => {
       if (++validates > 1) throw failure("IDENTITY_REVOKED");
+      return eligibleStatus;
     },
   });
   await session.bootstrap();
@@ -779,6 +804,7 @@ test("offline foreground validation retains the ready identity for later authent
     createIdentity: async () => "unused",
     validateIdentity: async () => {
       if (offline) throw new Error("offline");
+      return eligibleStatus;
     },
   });
   await session.bootstrap();
@@ -893,7 +919,7 @@ test("a device UUID failure keeps the draft retryable without creating a pending
 test("a late HTTP authentication failure from a replaced credential cannot invalidate the new session", async () => {
   const session = new Session(storage("old-credential").store, {
     createIdentity: async () => "new-credential",
-    validateIdentity: async () => {},
+    validateIdentity: async () => eligibleStatus,
   });
   await session.bootstrap();
   session.invalidate();
@@ -903,3 +929,30 @@ test("a late HTTP authentication failure from a replaced credential cannot inval
   session.invalidateCredential("new-credential");
   assert.equal(session.state.status, "invalid");
 });
+
+for (const code of [
+  "AGE_SCREENING_REQUIRED",
+  "AGE_INELIGIBLE",
+  "SOCIAL_ACCESS_DISABLED",
+]) {
+  test(`${code} socket invalidation clears chat and requests eligibility gating without resetting identity`, async () => {
+    const h = harness();
+    try {
+      await h.controller.start();
+      await tick();
+      h.sockets[0].emit("session:invalidated", {
+        error: {
+          statusCode: code === "SOCIAL_ACCESS_DISABLED" ? 503 : 403,
+          code,
+          message: "Unavailable",
+        },
+      });
+      assert.equal(h.controller.state.status, "blocked");
+      assert.equal(h.controller.state.messages.length, 0);
+      assert.deepEqual(h.socialFailures, [code]);
+      assert.equal(h.invalidations(), 0);
+    } finally {
+      h.controller.dispose();
+    }
+  });
+}

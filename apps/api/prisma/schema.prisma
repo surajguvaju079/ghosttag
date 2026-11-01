@@ -53,8 +53,29 @@ model AnonymousUser {
   identityCredential IdentityCredential?
   createdRooms       Room[]              @relation("RoomCreator")
   memberships        RoomMembership[]
+  ageEligibility     AgeEligibility?
 
   @@map("anonymous_users")
+}
+
+enum AgeEligibilityResult {
+  ELIGIBLE
+  INELIGIBLE
+}
+
+enum AgeAssessmentMethod {
+  DECLARED_DOB
+}
+
+model AgeEligibility {
+  userId        String                 @id @db.Uuid
+  result        AgeEligibilityResult
+  method        AgeAssessmentMethod    @default(DECLARED_DOB)
+  assessedAt    DateTime               @default(now()) @db.Timestamptz(6)
+  policyVersion String                 @db.VarChar(80)
+  user          AnonymousUser          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("age_eligibility")
 }
 
 model IdentityCredential {

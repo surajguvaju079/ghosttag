@@ -1,3 +1,7 @@
+import {
+  AgeEligibilityService,
+  ageAccessCodes,
+} from 'src/identity/age-eligibility.service';
 import { RateLimitService } from 'src/safety/rate-limit.service';
 import {
   ForbiddenException,
@@ -84,6 +88,7 @@ export class MessageGateway
     private readonly credentials: IdentityCredentialService,
     private readonly rooms: RoomService,
     private readonly rates: RateLimitService,
+    private readonly eligibility: AgeEligibilityService,
   ) {}
 
   afterInit(server: Namespace) {
@@ -108,6 +113,7 @@ export class MessageGateway
           const hash = this.credentials.hashToken(socket.handshake.auth.token);
           socket.handshake.auth = {};
           const credential = await this.credentials.verify(hash);
+          await this.eligibility.assertAccess(credential.userId);
           this.rates.consume('WS_CONNECT', credential.userId);
           socket.data = { credentialHash: hash, userId: credential.userId };
           next();
@@ -238,10 +244,13 @@ export class MessageGateway
         },
       };
     try {
+      await this.credentials.verify(state.hash);
+      await this.eligibility.assertAccess(state.userId);
       return { ok: true, data: await action(state) };
     } catch (error) {
       const failure = publicSocketError(error);
-      if (failure.statusCode === 401) this.disconnect(state, failure);
+      if (failure.statusCode === 401 || ageAccessCodes.includes(failure.code))
+        this.disconnect(state, failure);
       return { ok: false, error: failure };
     }
   }
@@ -291,6 +300,7 @@ export class MessageGateway
         [...this.connections.values()].map(async (state) => {
           try {
             await this.credentials.verify(state.hash);
+            await this.eligibility.assertAccess(state.userId);
           } catch (error) {
             this.disconnect(state, publicSocketError(error));
             return;

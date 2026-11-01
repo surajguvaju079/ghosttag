@@ -1,3 +1,4 @@
+import { ageAccessCodes } from "../api/contracts";
 import { ApiClient, ApiError, asApiError, normalizeCode } from "../api/client";
 import type {
   Failure,
@@ -64,6 +65,7 @@ export class RoomSession {
     private makeSocket: () => Transport,
     private uuid: () => string,
     private invalidateSession: () => void,
+    private rejectSocialAccess?: (failure: Failure) => void,
   ) {
     this.code = normalizeCode(code);
   }
@@ -142,6 +144,20 @@ export class RoomSession {
   ) {
     const failure = asApiError(error);
     const { statusCode } = failure.failure;
+    if (ageAccessCodes.includes(failure.failure.code)) {
+      this.stopSocket();
+      this.patch({
+        status: "blocked",
+        members: undefined,
+        membership: undefined,
+        participant: undefined,
+        messages: [],
+        pending: [],
+        error: failure,
+      });
+      this.rejectSocialAccess?.(failure.failure);
+      return;
+    }
     if (statusCode === 401) {
       this.stopSocket();
       this.patch({
@@ -253,6 +269,10 @@ export class RoomSession {
       );
       socket.on("session:invalidated", (event: { error: Failure }) => {
         if (this.current(epoch)) {
+          if (ageAccessCodes.includes(event.error.code)) {
+            this.fail(new ApiError(event.error));
+            return;
+          }
           this.stopSocket();
           this.patch({
             status: "blocked",

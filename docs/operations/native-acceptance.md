@@ -292,3 +292,20 @@ clipboard permissions to verify tabs, current/left sections, expiry filtering,
 locked entry, copying, Open/back and Rejoin/back. Room access is intentionally
 mocked as 423 to avoid a live socket/backend; those resource errors are expected.
 This does not verify native keyboard or sharing behavior.
+
+## 18+ screening acceptance
+
+The repeatable `apps/mobile/test/age-eligibility.browser.txt` script runs through
+Playwright CLI with the exported app served as an SPA at http://127.0.0.1:8091.
+It mocks API responses and verifies a neutral empty birthday form, blocked direct
+room links, Safety access, ineligibility without retry/reset controls, eligible but
+disabled rollout, subsequent enablement, and REST denial unmounting social routes.
+The expected mocked 403 resource error is distinct from a JavaScript exception.
+Other browser scripts explicitly provide eligible identity fixtures.
+
+On Android, repeat form entry, keyboard visibility and dismissal, font scaling,
+screen-reader labels, Safety navigation and app restart with the same credential.
+Verify an existing room membership survives successful screening and that Start
+fresh requires screening again. Verify foreground policy changes and socket denial
+clear visible content. These native checks are not established by browser checks
+or bundle exports and remain required before release.

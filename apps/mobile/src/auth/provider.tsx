@@ -8,6 +8,7 @@ import {
 } from "react";
 import { ApiClient, configuration, friendlyError } from "../api/client";
 import { browserPreview, credentialStore } from "./credential-store";
+import { AgeGate } from "./age-gate";
 import { Session } from "./session";
 import { Button, Text, styles } from "../ui/primitives";
 import { brand, BrandMark, BrandScreen } from "../ui/brand";
@@ -16,14 +17,16 @@ import { ActivityIndicator, AppState, View } from "react-native";
 function createRuntime() {
   try {
     const config = configuration(
-
       "https://api-ghosttag.vyomnix.com/api/v1",
 
       "https://api-ghosttag.vyomnix.com",
     );
     let session: Session;
-    const api = new ApiClient(config.apiUrl, fetch, (token) =>
-      session.invalidateCredential(token),
+    const api = new ApiClient(
+      config.apiUrl,
+      fetch,
+      (token) => session.invalidateCredential(token),
+      (token, error) => session.rejectAccess(token, error),
     );
     session = new Session(credentialStore, api);
     return { api, session, socketUrl: config.socketUrl };
@@ -75,6 +78,10 @@ function SessionGate({
     });
     return () => listener.remove();
   }, [runtime]);
+  if (["screening", "ineligible", "unavailable"].includes(state.status))
+    return (
+      <AgeGate key={state.status} state={state} session={runtime.session} />
+    );
   if (state.status !== "ready" || !state.token)
     return (
       <BrandScreen>

@@ -1,3 +1,4 @@
+import { SocialAccessGuard } from 'src/common/auth/social-access.guard';
 import {
   Controller,
   Get,
@@ -12,7 +13,7 @@ import type { AuthenticatedRequest } from 'src/common/auth/authenticated-request
 import { MessageService } from './message.service';
 
 @Controller('rooms/:code/messages')
-@UseGuards(AnonymousIdentityGuard)
+@UseGuards(AnonymousIdentityGuard, SocialAccessGuard)
 export class MessageController {
   constructor(private readonly messages: MessageService) {}
 

@@ -1,3 +1,4 @@
+import { AgeEligibilityService } from 'src/identity/age-eligibility.service';
 import { ConfigService } from '@nestjs/config';
 import { RateLimitService } from '../safety/rate-limit.service';
 import { ForbiddenException } from '@nestjs/common';
@@ -52,6 +53,9 @@ describe('MessageGateway delivery authorization', () => {
     credentials as unknown as IdentityCredentialService,
     {} as RoomService,
     new RateLimitService(new ConfigService()),
+    {
+      assertAccess: jest.fn().mockResolvedValue(undefined),
+    } as unknown as AgeEligibilityService,
   );
   function socket(id: string) {
     return {

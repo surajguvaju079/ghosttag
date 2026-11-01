@@ -1,3 +1,4 @@
+import { SocialAccessGuard } from 'src/common/auth/social-access.guard';
 import {
   Body,
   Controller,
@@ -14,7 +15,7 @@ import { RateLimit } from 'src/safety/rate-limit.guard';
 import { MessageReportService } from './message-report.service';
 
 @Controller('rooms/:code/messages/:messageId/reports')
-@UseGuards(AnonymousIdentityGuard)
+@UseGuards(AnonymousIdentityGuard, SocialAccessGuard)
 export class MessageReportController {
   constructor(private readonly reports: MessageReportService) {}
 

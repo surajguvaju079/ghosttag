@@ -41,9 +41,9 @@ No build, upload, account access, signing change, or deployment was performed.
 | Terms acceptance   | None                                                                                    | Approved published terms/guidelines; versioned acceptance before any UGC, server enforcement and tests         |
 | Identity deletion  | Credential revocation is checked on REST/sockets; Start fresh only replaces local token | Authenticated deletion, associated data semantics, web request path, receipts/retries and tests                |
 | Privacy            | SecureStore, hashed server credentials, room-scoped public IDs, private reports         | Owner/processor inventory, public policy, retention/backup decisions, Data safety signoff                      |
-| Child safety       | Existing message report categories can flag objectionable text                          | Named contact, published CSAE standards, escalation/reporting process, approved age policy and in-app feedback |
+| Child safety       | Existing message report categories can flag objectionable text                          | Named contact, published CSAE standards, escalation/reporting process and in-app feedback |
 | Moderation         | Private report rows, operator-controlled revocation/locks/deletion possible             | Assigned reviewer, review frequency, response times, action audit, client-cache limitations                    |
-| Audience/rating    | No age gate                                                                             | Owner audience/country decision, suitable screening, truthful IARC answers                                     |
+| Audience/rating    | Declared 18+ screening with server enforcement; social access disabled by default                                                                             | Launch-country/assurance decisions, Restrict Minor Access configuration, truthful IARC answers                                     |
 | Production backend | Health/readiness query, rate limits, expiry/cleanup, sanitized app logs                 | Public TLS/WSS deployment, edge protections, secrets validation, backup restore drill, monitoring              |
 | Native quality     | JS tests/exports and pixel checks                                                       | Installed AAB-derived APK, pre-launch report, physical two-device tests and accessibility                      |
 
@@ -54,8 +54,10 @@ inviting testers into a production-connected social service.
 
 ## Owner decisions and signoff
 
-- Confirm target audience/minimum age and distribution countries; 18+ is only a
-  proposal, not an implemented age policy or a substitute for child-safety duties.
+- The approved audience is 18+ throughout the app, with Android first. Select
+  distribution countries and settle any stronger assurance requirements before
+  enabling public access. Configure Restrict Minor Access in Play Console. Declared
+  screening is implemented; it is not verified age or a substitute for child-safety duties.
 - Approve room-scoped blocking through leave/rejoin, public participant targeting,
   persistence/API contract and semantics for past history/live delivery.
 - Approve deletion behavior for room creators without deleting others' conversations;

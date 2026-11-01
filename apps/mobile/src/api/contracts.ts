@@ -61,3 +61,18 @@ export type JoinedRoom = Pick<Room, "code" | "name" | "vibe" | "expiresAt"> & {
   membershipStatus: "ACTIVE" | "LEFT";
 };
 export type JoinedRooms = { rooms: JoinedRoom[] };
+
+export type IdentityStatus = {
+  ageEligibility: {
+    status: "REQUIRED" | "ELIGIBLE" | "INELIGIBLE";
+    method: "DECLARED_DOB" | null;
+    assessedAt: string | null;
+    policyVersion: string;
+  };
+  socialAccessEnabled: boolean;
+};
+export const ageAccessCodes = [
+  "AGE_SCREENING_REQUIRED",
+  "AGE_INELIGIBLE",
+  "SOCIAL_ACCESS_DISABLED",
+];

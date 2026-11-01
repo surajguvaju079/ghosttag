@@ -1,3 +1,4 @@
+import { AGE_POLICY_VERSION } from '../src/identity/age-eligibility.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
@@ -54,6 +55,8 @@ describe('Messaging safety + PostgreSQL + Socket.IO', () => {
   };
 
   beforeAll(async () => {
+    process.env.SOCIAL_ACCESS_ENABLED = 'true';
+    process.env.AGE_POLICY_VERSION = AGE_POLICY_VERSION;
     await ConfigModule.forRoot({ envFilePath: '.env' });
     const source = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
     if (!source)
@@ -100,11 +103,23 @@ describe('Messaging safety + PostgreSQL + Socket.IO', () => {
     identities = app.get(IdentityService);
   }, 60_000);
 
+  async function createEligibleIdentity() {
+    const identity = await identities.createIdentity();
+    await prisma.ageEligibility.create({
+      data: {
+        userId: identity.identityId,
+        result: 'ELIGIBLE',
+        policyVersion: AGE_POLICY_VERSION,
+      },
+    });
+    return identity;
+  }
+
   beforeEach(async () => {
     // Each test uses a fresh real limiter, with no public reset API or disabled checks.
     rates = new RateLimitService(new ConfigService());
-    owner = await identities.createIdentity();
-    member = await identities.createIdentity();
+    owner = await createEligibleIdentity();
+    member = await createEligibleIdentity();
     const room = await rooms.createRoom(owner.identityId, {
       vibe: 'DEEP_TALK',
     });
@@ -233,7 +248,7 @@ describe('Messaging safety + PostgreSQL + Socket.IO', () => {
     await create(owner.token).expect(201);
     await create(owner.token).expect(429);
     await create(member.token).expect(201);
-    const outsider = await identities.createIdentity();
+    const outsider = await createEligibleIdentity();
     await create(outsider.token).expect(429);
   });
 
@@ -380,7 +395,7 @@ describe('Messaging safety + PostgreSQL + Socket.IO', () => {
 
   it('denies nonmember, LEFT and invalid-credential reports', async () => {
     const target = await message();
-    const outsider = await identities.createIdentity();
+    const outsider = await createEligibleIdentity();
     await report(target.publicId, outsider.token).expect(403);
     await rooms.leaveRoom(member.identityId, code);
     await report(target.publicId).expect(403);

@@ -1,3 +1,4 @@
+import { AgeEligibilityService } from 'src/identity/age-eligibility.service';
 import { RateLimitService } from 'src/safety/rate-limit.service';
 import { ConflictException, Injectable } from '@nestjs/common';
 import type { Prisma, Room, RoomMembership } from 'generated/prisma/client';
@@ -28,6 +29,7 @@ export class MessageService {
     private readonly rooms: RoomService,
     private readonly repository: MessageRepository,
     private readonly rates: RateLimitService,
+    private readonly eligibility: AgeEligibilityService,
   ) {}
 
   access<T>(
@@ -40,6 +42,7 @@ export class MessageService {
     return this.prisma.$transaction(
       async (tx) => {
         const credential = await this.credentials.verify(hash, tx);
+        await this.eligibility.assertAccess(credential.userId, tx);
         const { room, membership } = await this.rooms.authorizeActiveMember(
           tx,
           credential.userId,
@@ -55,6 +58,7 @@ export class MessageService {
 
   assertLive(access: Pick<MessageAccess, 'room' | 'credential'>) {
     this.credentials.assertValid(access.credential);
+    this.eligibility.assertEnabled();
     this.rooms.assertAccessible(access.room);
   }
 

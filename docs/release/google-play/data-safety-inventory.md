@@ -28,3 +28,12 @@ Do not conflate recipient room delivery with an unreviewed no-sharing claim.
 Account-deletion work is unresolved; do not mark the feature implemented. Internal-
 only track form exemptions, if applicable in Console, do not eliminate underlying
 privacy/safety work or justify a false declaration when expanding testing.
+
+## Age screening addition
+
+Date of birth is transmitted to the API for transient eligibility calculation and is
+not retained or echoed by application code. Do not describe it as never collected.
+The result, declared assessment method, time and policy version are retained against
+the internal anonymous identity, beyond room expiry. No verification documents or
+biometrics are added. Reassess Play declarations, policy notices, infrastructure-body
+logging and launch-country obligations before enabling social access.

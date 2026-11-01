@@ -1,3 +1,4 @@
+import { AGE_POLICY_VERSION } from '../src/identity/age-eligibility.service';
 import { RetentionRunner } from '../src/retention/retention.runner';
 import type { Server } from 'node:http';
 import { ConfigModule } from '@nestjs/config';
@@ -82,6 +83,8 @@ describe('Real-time messaging + PostgreSQL', () => {
   const databaseName = `ghosttag_test_${randomUUID().replaceAll('-', '')}`;
 
   beforeAll(async () => {
+    process.env.SOCIAL_ACCESS_ENABLED = 'true';
+    process.env.AGE_POLICY_VERSION = AGE_POLICY_VERSION;
     await ConfigModule.forRoot({ envFilePath: '.env' });
     const source = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
     if (!source)
@@ -127,9 +130,21 @@ describe('Real-time messaging + PostgreSQL', () => {
     identities = app.get(IdentityService);
   }, 60_000);
 
+  async function createEligibleIdentity() {
+    const identity = await identities.createIdentity();
+    await prisma.ageEligibility.create({
+      data: {
+        userId: identity.identityId,
+        result: 'ELIGIBLE',
+        policyVersion: AGE_POLICY_VERSION,
+      },
+    });
+    return identity;
+  }
+
   beforeEach(async () => {
-    owner = await identities.createIdentity();
-    member = await identities.createIdentity();
+    owner = await createEligibleIdentity();
+    member = await createEligibleIdentity();
     const room = await rooms.createRoom(owner.identityId, {
       vibe: 'DEEP_TALK',
     });
@@ -234,7 +249,7 @@ describe('Real-time messaging + PostgreSQL', () => {
   });
 
   it('denies nonmembers, LEFT memberships and spoofed identity fields', async () => {
-    const outsider = await identities.createIdentity();
+    const outsider = await createEligibleIdentity();
     const socket = await connect(outsider.token);
     expect(await subscribe(socket)).toMatchObject({
       ok: false,
@@ -422,7 +437,7 @@ describe('Real-time messaging + PostgreSQL', () => {
     expect(response.body).toMatchObject({ code: 'INVALID_CURSOR' });
     await history().query({ limit: 101 }).expect(400);
     await history().query({ before: randomUUID() }).expect(400);
-    const outsider = await identities.createIdentity();
+    const outsider = await createEligibleIdentity();
     await history(outsider.token).expect(403);
     await history('invalid').expect(401);
     await request(app.getHttpServer())

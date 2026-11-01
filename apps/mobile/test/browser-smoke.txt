@@ -48,7 +48,10 @@ async (page) => {
         token: "smoke-credential",
         identityId: "INTERNAL-DO-NOT-RENDER",
       };
-    } else if (path === "/api/v1/rooms")
+    } else if (path === "/api/v1/identity/me") body = {
+      ageEligibility: { status: "ELIGIBLE", method: "DECLARED_DOB", assessedAt: new Date().toISOString(), policyVersion: "18-plus-v1" }, socialAccessEnabled: true,
+    };
+    else if (path === "/api/v1/rooms")
       body = { ...room, id: "INTERNAL-DO-NOT-RENDER", membership: ghost };
     else if (path.endsWith("/reports")) {
       reports++;

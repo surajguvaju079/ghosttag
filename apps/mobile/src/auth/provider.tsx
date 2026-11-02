@@ -17,9 +17,8 @@ import { ActivityIndicator, AppState, View } from "react-native";
 function createRuntime() {
   try {
     const config = configuration(
-      "https://trouble-undoing-annex.ngrok-free.dev/api/v1",
-
-      "https://trouble-undoing-annex.ngrok-free.dev",
+      process.env.EXPO_PUBLIC_API_URL,
+      process.env.EXPO_PUBLIC_SOCKET_URL,
     );
     let session: Session;
     const api = new ApiClient(

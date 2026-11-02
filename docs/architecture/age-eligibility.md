@@ -56,7 +56,9 @@ Cleanup/unsubscription state is also cleared when a socket is denied.
 ## Mobile
 
 Session bootstrap validates eligibility after both loading and creating a credential.
-A neutral birthday screen has no preselected date/adult default. The credential stays
+A neutral birthday screen has separate Year, Month, and Day selectors with no
+preselected date or adult default. Day choices follow the selected month and year,
+and future dates cannot be selected. The credential stays
 in SecureStore; birthdays exist only in the form/request memory and are cleared after
 submission or screen teardown. Existing memberships survive screening. Eligibility,
 ineligibility and disabled-access screens mount instead of social routes, including

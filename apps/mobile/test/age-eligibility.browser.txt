@@ -7,6 +7,14 @@ async (page) => {
     ageEligibility: { status, policyVersion: '18-plus-v1', method: status === 'REQUIRED' ? null : 'DECLARED_DOB', assessedAt: status === 'REQUIRED' ? null : '2026-11-01T00:00:00.000Z' },
     socialAccessEnabled: social
   });
+  const selectBirthday = async (year) => {
+    await page.getByRole('button', { name: 'Select birth year' }).click();
+    await page.getByRole('button', { name: year, exact: true }).click();
+    await page.getByRole('button', { name: 'Select birth month' }).click();
+    await page.getByRole('button', { name: 'January', exact: true }).click();
+    await page.getByRole('button', { name: 'Select birth day' }).click();
+    await page.getByRole('button', { name: '1', exact: true }).click();
+  };
   await page.setViewportSize({ width: 390, height: 844 });
   await page.unroute('**/api/v1/**');
   await page.route('**/api/v1/**', async route => {
@@ -28,23 +36,23 @@ async (page) => {
   });
   // Direct room navigation must not mount chat or request room content before screening.
   await page.goto('http://127.0.0.1:8091/room/GH-1234');
-  const birthday = page.getByRole('textbox', { name: 'Date of birth', exact: true });
-  await birthday.waitFor();
-  if (await birthday.inputValue()) throw Error('Birthday must not have a default');
+  await page.getByRole('button', { name: 'Select birth year' }).waitFor();
+  if (await page.getByText('Select', { exact: true }).count() !== 3) throw Error('Birthday must not have a default');
+  if (!(await page.getByRole('button', { name: 'Select birth day' }).isDisabled())) throw Error('Day enabled before month and year');
   if (!(await page.getByRole('button', { name: 'Continue', exact: true }).isDisabled())) throw Error('Empty birthday accepted');
   if (roomRequests || await page.getByRole('tab').count()) throw Error('Social routes mounted before screening');
   await page.getByRole('button', { name: 'Safety & privacy', exact: true }).click();
   await page.getByText('AGE ELIGIBILITY', { exact: true }).waitFor();
   await page.getByRole('button', { name: 'Back', exact: true }).click();
-  await birthday.fill('2020-01-01');
+  await selectBirthday('2020');
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByText('GhostTag isn’t available', { exact: true }).waitFor();
-  if (await page.getByRole('textbox').count() || await page.getByRole('button', { name: 'Start fresh', exact: true }).count()) throw Error('Ineligible identity offered bypass controls');
+  if (await page.getByRole('button', { name: 'Select birth year' }).count() || await page.getByRole('button', { name: 'Start fresh', exact: true }).count()) throw Error('Ineligible identity offered bypass controls');
   if (roomRequests) throw Error('Ineligible identity requested room content');
 
   status = 'REQUIRED';
   await page.goto('http://127.0.0.1:8091/');
-  await birthday.fill('2000-01-01');
+  await selectBirthday('2000');
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByText('A little more time', { exact: true }).waitFor();
   if (await page.getByRole('tab').count()) throw Error('Disabled rollout exposed social UI');

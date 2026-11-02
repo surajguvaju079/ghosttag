@@ -22,6 +22,7 @@ import {
 } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { randomUUID } from "expo-crypto";
+import { SymbolView } from "expo-symbols";
 import { useSession } from "../../auth/provider";
 import { ApiError, friendlyError, normalizeCode } from "../../api/client";
 import {
@@ -225,12 +226,17 @@ function RoomScreen({ code }: { code: string }) {
               accessibilityLabel="Back, keep room membership"
               onPress={backToRooms}
               style={{
-                minWidth: 44,
-                minHeight: 44,
+                width: 44,
+                height: 44,
+                alignItems: "center",
                 justifyContent: "center",
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: palette.line,
+                backgroundColor: palette.raised,
               }}
             >
-              <Text style={{ fontSize: 22 }}>←</Text>
+              <SymbolView name={{ ios: "chevron.left", android: "arrow_back", web: "arrow_back" }} size={20} tintColor={palette.text} />
             </Pressable>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text numberOfLines={1} style={{ fontSize: 17, fontWeight: "800" }}>

@@ -243,7 +243,6 @@ export class MessageGateway
               recipient.hash,
               result.code,
               result.messageId,
-              result.type,
             );
             if (
               !snapshot ||

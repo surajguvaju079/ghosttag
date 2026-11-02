@@ -434,16 +434,7 @@ export class RoomSession {
     this.patch({
       messages: this.state.messages.map((message) => {
         if (message.messageId !== update.messageId) return message;
-        const reactions = (message.reactions ?? []).filter(
-          (reaction) => reaction.type !== update.type,
-        );
-        if (update.count > 0)
-          reactions.push({
-            type: update.type,
-            count: update.count,
-            mine: update.mine,
-          });
-        return { ...message, reactions };
+        return { ...message, reactions: update.reactions };
       }),
     });
   }

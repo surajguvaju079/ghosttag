@@ -310,18 +310,22 @@ FIRE
 LAUGH
 SHOCK
 MIND_BLOWN
+LIKE
+LOVE
+SAD
+ANGRY
 
 These correspond to the initial UI reactions:
 
-🔥 😂 😱 🤯
+🔥 😂 😱 🤯 👍 ❤️ 😢 😡
 Duplicate Reactions
 
-The system must prevent a member from creating the same reaction type
-multiple times on the same message.
+The system permits one reaction per member on a message. Choosing another type
+replaces the previous type; choosing the same type removes it.
 
 Conceptually:
 
-UNIQUE(messageId, membershipId, type)
+UNIQUE(messageId, membershipId)
 
 The database must enforce this constraint.
 

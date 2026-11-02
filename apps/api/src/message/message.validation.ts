@@ -1,4 +1,16 @@
 import { BadRequestException } from '@nestjs/common';
+import type { ReactionType } from 'generated/prisma/client';
+
+export const reactionTypes: ReactionType[] = [
+  'FIRE',
+  'LAUGH',
+  'SHOCK',
+  'MIND_BLOWN',
+  'LIKE',
+  'LOVE',
+  'SAD',
+  'ANGRY',
+];
 
 export function invalid(
   code = 'INVALID_MESSAGE_PAYLOAD',
@@ -73,12 +85,12 @@ export function reactionPayload(value: unknown) {
     !/^m_[0-9a-f]{32}$/.test(object.messageId)
   )
     invalid('MESSAGE_NOT_FOUND', 'Message not found');
-  if (!['FIRE', 'LAUGH', 'SHOCK', 'MIND_BLOWN'].includes(String(object.type)))
+  if (!reactionTypes.includes(object.type as ReactionType))
     invalid('INVALID_REACTION', 'Invalid reaction');
   return {
     code,
     messageId: object.messageId,
-    type: object.type as 'FIRE' | 'LAUGH' | 'SHOCK' | 'MIND_BLOWN',
+    type: object.type as ReactionType,
   };
 }
 

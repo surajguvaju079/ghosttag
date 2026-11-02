@@ -451,15 +451,30 @@ test("reply send keeps its target and live reactions update only the addressed m
     h.sockets[0].emit("message:reaction", {
       code: "GH-1234",
       messageId: message(1).messageId,
-      type: "FIRE",
-      count: 2,
-      mine: true,
+      reactions: [{ type: "FIRE", count: 2, mine: true }],
     });
     assert.deepEqual(
       h.controller.state.messages.find(
         (item) => item.messageId === message(1).messageId,
       )?.reactions,
       [{ type: "FIRE", count: 2, mine: true }],
+    );
+    h.sockets[0].emit("message:reaction", {
+      code: "GH-1234",
+      messageId: message(1).messageId,
+      reactions: [
+        { type: "FIRE", count: 1, mine: false },
+        { type: "LOVE", count: 1, mine: true },
+      ],
+    });
+    assert.deepEqual(
+      h.controller.state.messages.find(
+        (item) => item.messageId === message(1).messageId,
+      )?.reactions,
+      [
+        { type: "FIRE", count: 1, mine: false },
+        { type: "LOVE", count: 1, mine: true },
+      ],
     );
     assert.equal(
       h.controller.state.messages.find(

@@ -355,17 +355,21 @@ describe('Real-time messaging + PostgreSQL', () => {
     await subscribe(receiver);
     const original = await send(sender);
     const messageId = original.data.message.messageId;
-    const pushed = event<{ count: number; mine: boolean }>(
-      receiver,
-      'message:reaction',
-    );
+    const pushed = event<{
+      reactions: { type: string; count: number; mine: boolean }[];
+    }>(receiver, 'message:reaction');
     const added = await ack(sender, 'message:react', {
       code,
       messageId,
       type: 'FIRE',
     });
-    expect(added).toMatchObject({ ok: true, data: { count: 1, mine: true } });
-    expect(await pushed).toMatchObject({ count: 1, mine: false });
+    expect(added).toMatchObject({
+      ok: true,
+      data: { reactions: [{ type: 'FIRE', count: 1, mine: true }] },
+    });
+    expect(await pushed).toMatchObject({
+      reactions: [{ type: 'FIRE', count: 1, mine: false }],
+    });
     const page = await history();
     expect(
       (page.body as { messages: PublicMessage[] }).messages[0].reactions,
@@ -375,11 +379,27 @@ describe('Real-time messaging + PostgreSQL', () => {
       messageId,
       type: 'FIRE',
     });
-    expect(removed).toMatchObject({
-      ok: true,
-      data: { count: 0, mine: false },
-    });
+    expect(removed).toMatchObject({ ok: true, data: { reactions: [] } });
     expect(await prisma.reaction.count()).toBe(0);
+    const like = await ack(sender, 'message:react', {
+      code,
+      messageId,
+      type: 'LIKE',
+    });
+    expect(like).toMatchObject({
+      ok: true,
+      data: { reactions: [{ type: 'LIKE', count: 1, mine: true }] },
+    });
+    const love = await ack(sender, 'message:react', {
+      code,
+      messageId,
+      type: 'LOVE',
+    });
+    expect(love).toMatchObject({
+      ok: true,
+      data: { reactions: [{ type: 'LOVE', count: 1, mine: true }] },
+    });
+    expect(await prisma.reaction.count()).toBe(1);
   });
 
   it('distinguishes identical ghost names and isolates the same identity across rooms', async () => {

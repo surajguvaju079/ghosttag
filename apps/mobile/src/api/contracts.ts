@@ -35,14 +35,21 @@ export type Message = {
   };
   reactions?: { type: ReactionType; count: number; mine: boolean }[];
 };
-export const REACTIONS = ["FIRE", "LAUGH", "SHOCK", "MIND_BLOWN"] as const;
+export const REACTIONS = [
+  "FIRE",
+  "LAUGH",
+  "SHOCK",
+  "MIND_BLOWN",
+  "LIKE",
+  "LOVE",
+  "SAD",
+  "ANGRY",
+] as const;
 export type ReactionType = (typeof REACTIONS)[number];
 export type ReactionUpdate = {
   code: string;
   messageId: string;
-  type: ReactionType;
-  count: number;
-  mine: boolean;
+  reactions: { type: ReactionType; count: number; mine: boolean }[];
 };
 export type History = { messages: Message[]; nextCursor: string | null };
 export type Participant = Ghost & { participantId: string };

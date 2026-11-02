@@ -16,6 +16,7 @@ import { MessageRepository, messageInclude } from './message.repository';
 import {
   historyQuery,
   reactionPayload,
+  reactionTypes,
   roomCode,
   sendPayload,
 } from './message.validation';
@@ -204,7 +205,7 @@ export class MessageService {
         : {}),
       ...(message.reactions.length
         ? {
-            reactions: ['FIRE', 'LAUGH', 'SHOCK', 'MIND_BLOWN']
+            reactions: reactionTypes
               .map((type) => ({
                 type,
                 count: message.reactions.filter(
@@ -239,17 +240,18 @@ export class MessageService {
             message: 'Message not found',
           });
         const where = {
-          messageId_membershipId_type: {
+          messageId_membershipId: {
             messageId: message.id,
             membershipId: membership.id,
-            type: input.type,
           },
         };
         const existing = await tx.reaction.findUnique({
           where,
-          select: { id: true },
+          select: { type: true },
         });
-        if (existing) await tx.reaction.delete({ where });
+        if (existing?.type === input.type) await tx.reaction.delete({ where });
+        else if (existing)
+          await tx.reaction.update({ where, data: { type: input.type } });
         else
           await tx.reaction.create({
             data: {
@@ -258,41 +260,55 @@ export class MessageService {
               type: input.type,
             },
           });
-        const count = await tx.reaction.count({
-          where: { messageId: message.id, type: input.type },
-        });
-        return {
-          code: room.code,
-          messageId: message.publicId,
-          type: input.type,
-          count,
-          mine: !existing,
-        };
+        return this.reactionSummary(
+          tx,
+          room.code,
+          message.id,
+          message.publicId,
+          membership.id,
+        );
       },
       true,
     );
   }
 
-  reactionSnapshot(
-    hash: string,
-    code: string,
-    messageId: string,
-    type: 'FIRE' | 'LAUGH' | 'SHOCK' | 'MIND_BLOWN',
-  ) {
+  reactionSnapshot(hash: string, code: string, messageId: string) {
     return this.access(hash, code, async ({ tx, room, membership }) => {
       const message = await this.repository.findPublic(tx, room.id, messageId);
       if (!message) return;
-      const rows = await tx.reaction.findMany({
-        where: { messageId: message.id, type },
-        select: { membershipId: true },
-      });
-      return {
-        code: room.code,
+      return this.reactionSummary(
+        tx,
+        room.code,
+        message.id,
         messageId,
-        type,
-        count: rows.length,
-        mine: rows.some((row) => row.membershipId === membership.id),
-      };
+        membership.id,
+      );
     });
+  }
+
+  private async reactionSummary(
+    tx: Prisma.TransactionClient,
+    code: string,
+    id: string,
+    messageId: string,
+    membershipId: string,
+  ) {
+    const rows = await tx.reaction.findMany({
+      where: { messageId: id },
+      select: { type: true, membershipId: true },
+    });
+    return {
+      code,
+      messageId,
+      reactions: reactionTypes
+        .map((type) => ({
+          type,
+          count: rows.filter((row) => row.type === type).length,
+          mine: rows.some(
+            (row) => row.type === type && row.membershipId === membershipId,
+          ),
+        }))
+        .filter((reaction) => reaction.count > 0),
+    };
   }
 }

@@ -35,6 +35,10 @@ enum ReactionType {
   LAUGH
   SHOCK
   MIND_BLOWN
+  LIKE
+  LOVE
+  SAD
+  ANGRY
 }
 
 enum PollOption {
@@ -200,7 +204,7 @@ model Reaction {
   message    Message        @relation(fields: [messageId], references: [id], onDelete: Cascade)
   membership RoomMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
 
-  @@unique([messageId, membershipId, type])
+  @@unique([messageId, membershipId])
   @@index([messageId])
   @@index([membershipId])
   @@map("reactions")

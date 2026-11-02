@@ -117,10 +117,12 @@ the insert failed: retry the original key or recover through history.
 ### `message:react`
 
 Send `{ "code": "GH-4829", "messageId": "m_...", "type": "FIRE" }` to toggle
-one reaction. Types are `FIRE`, `LAUGH`, `SHOCK`, and `MIND_BLOWN`. The ack returns
-`{ code, messageId, type, count, mine }`; `mine` reflects the caller's membership.
+one reaction. Types are `FIRE`, `LAUGH`, `SHOCK`, `MIND_BLOWN`, `LIKE`, `LOVE`,
+`SAD`, and `ANGRY`. The ack returns `{ code, messageId, reactions }`, where each
+reaction has `{ type, count, mine }`; `mine` reflects the caller's membership.
 Only an active member of an accessible room can react. A missing or cross-room
-message is rejected. Each reaction type can be toggled independently.
+message is rejected. Tapping the current reaction removes it; tapping a different
+type replaces the current one.
 
 ### `message:reaction`
 

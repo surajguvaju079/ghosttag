@@ -481,7 +481,13 @@ function RoomScreen({ code }: { code: string }) {
                     {item.text}
                   </Text>
                 </View>
-                <View style={[styles.row, { flexWrap: "wrap", gap: 4 }]}>
+                <ScrollView
+                  horizontal
+                  style={{ flexGrow: 0, height: 40 }}
+                  showsHorizontalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                  contentContainerStyle={[styles.row, { gap: 4, alignItems: "center" }]}
+                >
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`Reply to ${item.author.ghostName}`}
@@ -507,6 +513,10 @@ function RoomScreen({ code }: { code: string }) {
                       LAUGH: "😂",
                       SHOCK: "😱",
                       MIND_BLOWN: "🤯",
+                      LIKE: "👍",
+                      LOVE: "❤️",
+                      SAD: "😢",
+                      ANGRY: "😡",
                     }[type];
                     return (
                       <Pressable
@@ -531,7 +541,7 @@ function RoomScreen({ code }: { code: string }) {
                       </Pressable>
                     );
                   })}
-                </View>
+                </ScrollView>
                 <View style={[styles.row, { justifyContent: "space-between" }]}>
                   <Text style={{ color: palette.muted, fontSize: 10 }}>
                     {new Date(item.createdAt).toLocaleTimeString([], {

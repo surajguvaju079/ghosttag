@@ -172,11 +172,13 @@ and pending rows shrink to preserve composer space. Layout
 changes follow the latest message only when already near the latest messages.
 Native keyboard and cursor behavior still require device acceptance checks.
 
-Room cards and chat headers offer Copy code via SDK-compatible `expo-clipboard`
-and Share via the native share sheet. Browser sharing uses the Web Share API where
-available and otherwise directs the user to Copy code. Only public room codes and
-entry instructions are shared, with feedback on copy success or action failure.
-No invite-link/deep-link contract or durable message/draft storage was added.
+Room cards and chat headers show the room code and, when available, invite link
+with adjacent copy icons via SDK-compatible `expo-clipboard`. Share stays in the same compact row
+and opens the native share sheet. Browser sharing uses the Web Share API where
+available and otherwise directs the user to copy a link or code. The chat header keeps
+the room name, status, member count and exit action in one row to leave more
+space for messages; sharing controls hide while typing. Copy and share actions
+give feedback on success or failure.
 
 ## App-wide age eligibility
 

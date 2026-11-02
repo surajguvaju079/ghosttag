@@ -212,13 +212,14 @@ function RoomScreen({ code }: { code: string }) {
       >
         <View
           style={{
-            padding: keyboardVisible ? 8 : 20,
-            gap: keyboardVisible ? 4 : 16,
+            paddingHorizontal: 12,
+            paddingVertical: keyboardVisible ? 4 : 8,
+            gap: keyboardVisible ? 0 : 6,
             borderBottomWidth: 1,
             borderColor: palette.line,
           }}
         >
-          <View style={[styles.row, { justifyContent: "space-between" }]}>
+          <View style={[styles.row, { gap: 6 }]}>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Back, keep room membership"
@@ -229,19 +230,39 @@ function RoomScreen({ code }: { code: string }) {
                 justifyContent: "center",
               }}
             >
-              <Text style={{ fontSize: 25 }}>←</Text>
+              <Text style={{ fontSize: 22 }}>←</Text>
             </Pressable>
-            <View style={[styles.pill, { flexDirection: "row", gap: 8 }]}>
-              <Text
-                style={{
-                  color: "#CBB7FF",
-                  fontWeight: "800",
-                  letterSpacing: 2,
-                }}
-              >
-                {code}
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text numberOfLines={1} style={{ fontSize: 17, fontWeight: "800" }}>
+                {state.details?.room.name || vibeLabel(state.details?.room.vibe)}
               </Text>
+              {!keyboardVisible && (
+                <Text numberOfLines={1} accessibilityLiveRegion="polite" style={styles.caption}>
+                  {statusLabel} · {state.status === "expired"
+                    ? "Ended"
+                    : expires
+                      ? `${countdown} left`
+                      : "Temporary by design"}
+                  {state.membership
+                    ? ` · ${avatar(state.membership.ghostAvatar)} ${state.membership.ghostName}`
+                    : ""}
+                </Text>
+              )}
             </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="View room members"
+              disabled={!ready}
+              onPress={() => {
+                setModal("members");
+                void controller.refreshMembers();
+              }}
+              style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}
+            >
+              <Text numberOfLines={1} style={styles.caption}>
+                👻 {state.members?.total ?? "—"}
+              </Text>
+            </Pressable>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={
@@ -250,7 +271,7 @@ function RoomScreen({ code }: { code: string }) {
                   : "Leave Room"
               }
               onPress={() => setModal("leave")}
-              style={{ minHeight: 44, justifyContent: "center" }}
+              style={{ minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" }}
             >
               <Text style={{ color: palette.pink, fontWeight: "700" }}>
                 {state.details?.room.kind === "MATCHED" ? "End" : "Leave"}
@@ -267,63 +288,6 @@ function RoomScreen({ code }: { code: string }) {
               now={now}
             />
           )}
-          {!keyboardVisible && (
-            <View style={[styles.row, { justifyContent: "space-between" }]}>
-              <View style={{ flex: 1, gap: 4 }}>
-                <Text
-                  numberOfLines={2}
-                  style={{
-                    fontSize: 24,
-                    fontWeight: "800",
-                    letterSpacing: -0.7,
-                  }}
-                >
-                  {state.details?.room.name ||
-                    vibeLabel(state.details?.room.vibe)}
-                </Text>
-                <Text style={styles.caption}>
-                  {vibeLabel(state.details?.room.vibe)} ·{" "}
-                  {state.status === "expired"
-                    ? "Ended"
-                    : expires
-                      ? `${countdown} left`
-                      : "Temporary by design"}
-                </Text>
-              </View>
-              <Button
-                label={`👻 ${state.members?.total ?? "—"}/${state.details?.room.maxCapacity ?? 50}`}
-                secondary
-                disabled={!ready}
-                onPress={() => {
-                  setModal("members");
-                  void controller.refreshMembers();
-                }}
-              />
-            </View>
-          )}
-          <View style={styles.row}>
-            <View
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: 3,
-                backgroundColor: ready ? palette.green : palette.pink,
-              }}
-            />
-            <Text accessibilityLiveRegion="polite" style={styles.caption}>
-              {statusLabel}
-            </Text>
-            {state.membership && (
-              <Text
-                style={[styles.caption, { flex: 1, textAlign: "right" }]}
-                numberOfLines={1}
-              >
-                {avatar(state.membership.ghostAvatar)}{" "}
-                {state.membership.ghostName} ·{" "}
-                {state.membership.role.toLowerCase()}
-              </Text>
-            )}
-          </View>
         </View>
         {state.error && (
           <View style={{ padding: 12, gap: 8 }}>

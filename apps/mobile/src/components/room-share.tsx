@@ -1,8 +1,9 @@
 import { inviteLink } from "../linking/invites";
 import { useEffect, useRef, useState } from "react";
-import { Platform, Share, View } from "react-native";
+import { Platform, Pressable, Share, View } from "react-native";
 import * as Clipboard from "expo-clipboard";
-import { Button, Text, styles } from "../ui/primitives";
+import { SymbolView } from "expo-symbols";
+import { palette, Text, styles } from "../ui/primitives";
 import { inviteMessage } from "../rooms/joined-rooms";
 
 export function RoomShare({
@@ -40,7 +41,7 @@ export function RoomShare({
     try {
       if (Platform.OS === "web") {
         if (!navigator.share) {
-          feedback("Use Copy code to share this room.");
+          feedback("Copy the link or code to share this room.");
           return;
         }
         await navigator.share({ text: inviteMessage(code, inviteId) });
@@ -51,13 +52,77 @@ export function RoomShare({
     }
   }
   return (
-    <View style={{ gap: 6 }}>
-      <View style={[styles.row, { flexWrap: "wrap" }]}>
-        <Button label="Copy code" secondary onPress={() => void copy()} />
+    <View style={{ gap: 4 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 6,
+          padding: 6,
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: palette.line,
+          backgroundColor: palette.card,
+        }}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Copy code"
+          onPress={() => void copy()}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            minWidth: 0,
+            minHeight: 44,
+            paddingHorizontal: 8,
+            borderRadius: 10,
+            backgroundColor: palette.raised,
+          }}
+        >
+          <Text numberOfLines={1} style={{ fontWeight: "800", color: "#CBB7FF", fontSize: 13 }}>
+            {code}
+          </Text>
+          <SymbolView name={{ ios: "doc.on.doc", android: "content_copy", web: "content_copy" }} size={17} tintColor={palette.text} />
+        </Pressable>
         {inviteId && (
-          <Button label="Copy link" secondary onPress={() => void copy(true)} />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Copy link"
+            onPress={() => void copy(true)}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              minHeight: 44,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 4,
+              paddingHorizontal: 8,
+              borderRadius: 10,
+              backgroundColor: palette.raised,
+            }}
+          >
+            <Text numberOfLines={1} ellipsizeMode="middle" style={[styles.caption, { flex: 1 }]}>
+              {inviteLink(code, inviteId)}
+            </Text>
+            <SymbolView name={{ ios: "doc.on.doc", android: "content_copy", web: "content_copy" }} size={17} tintColor={palette.text} />
+          </Pressable>
         )}
-        <Button label="Share" secondary onPress={() => void share()} />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Share room"
+          onPress={() => void share()}
+          style={{
+            width: 44,
+            height: 44,
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: 10,
+            backgroundColor: palette.purple,
+          }}
+        >
+          <SymbolView name={{ ios: "square.and.arrow.up", android: "share", web: "share" }} size={19} tintColor={palette.text} />
+        </Pressable>
       </View>
       {!!notice && (
         <Text accessibilityLiveRegion="polite" style={styles.caption}>

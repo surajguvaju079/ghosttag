@@ -1,3 +1,4 @@
+import { MatchingHomeEntry } from "../../matching/home-entry";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -72,6 +73,7 @@ export default function Home() {
           <View style={home.hero}>
             <BrandMark />
           </View>
+          <MatchingHomeEntry />
           <View style={home.card}>
             <LinearGradient
               pointerEvents="none"

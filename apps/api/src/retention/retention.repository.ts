@@ -5,6 +5,12 @@ import { PrismaService } from 'src/database/prisma/prisma.service';
 export class RetentionRepository {
   constructor(private readonly prisma: PrismaService) {}
 
+  async cleanupSearches() {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(7210912345::bigint)`;
+      return tx.$executeRaw`DELETE FROM "match_searches" WHERE "userId" IN (SELECT "userId" FROM "match_searches" WHERE "expiresAt" <= NOW() OR "leaseUntil" <= NOW() ORDER BY "expiresAt" LIMIT 100)`;
+    });
+  }
   chunk(cutoff: Date, batchSize: number): Promise<boolean> {
     return this.prisma.$transaction(
       async (tx) => {

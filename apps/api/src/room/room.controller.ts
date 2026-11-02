@@ -1,6 +1,7 @@
 import { SocialAccessGuard } from 'src/common/auth/social-access.guard';
 import { RateLimit } from 'src/safety/rate-limit.guard';
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -71,6 +72,26 @@ export class RoomController {
     @Param('code') code: string,
   ) {
     return this.roomService.joinRoom(identity.id, code);
+  }
+
+  @Post(':code/invites/:inviteId/join')
+  @RateLimit('ROOM_JOIN')
+  @HttpCode(200)
+  joinInvite(
+    @CurrentIdentity() identity: AuthenticatedIdentity,
+    @Param('code') code: string,
+    @Param('inviteId') inviteId: string,
+  ) {
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        inviteId,
+      )
+    )
+      throw new BadRequestException({
+        code: 'INVALID_ROOM_INVITE',
+        message: 'Invalid room invite.',
+      });
+    return this.roomService.joinRoom(identity.id, code, inviteId);
   }
 
   @Post(':code/leave')

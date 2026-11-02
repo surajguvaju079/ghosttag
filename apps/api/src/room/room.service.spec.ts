@@ -5,6 +5,8 @@ import { PrismaService } from 'src/database/prisma/prisma.service';
 const room = {
   id: 'private-room',
   code: 'GH-1234',
+  kind: 'GROUP',
+  inviteId: '11111111-1111-4111-8111-111111111111',
   vibe: 'DEEP_TALK',
   name: null,
   expiresAt: new Date(Date.now() + 86_400_000),
@@ -57,6 +59,8 @@ describe('RoomService', () => {
   it('lists only public room summaries for the authenticated identity', async () => {
     const publicRoom = {
       code: room.code,
+      kind: room.kind,
+      inviteId: room.inviteId,
       name: room.name,
       vibe: room.vibe,
       expiresAt: room.expiresAt,
@@ -68,8 +72,13 @@ describe('RoomService', () => {
     ]);
     const result = await service.listRooms(membership.userId);
     expect(result.rooms).toEqual([
-      { ...publicRoom, membershipStatus: 'ACTIVE' },
-      { ...publicRoom, code: 'GH-5678', membershipStatus: 'LEFT' },
+      { ...publicRoom, matchId: null, membershipStatus: 'ACTIVE' },
+      {
+        ...publicRoom,
+        code: 'GH-5678',
+        matchId: null,
+        membershipStatus: 'LEFT',
+      },
     ]);
     expect(tx.roomMembership.findMany).toHaveBeenCalledWith({
       where: {
@@ -82,6 +91,9 @@ describe('RoomService', () => {
         room: {
           select: {
             code: true,
+            kind: true,
+            inviteId: true,
+            matchSession: { select: { publicId: true } },
             name: true,
             vibe: true,
             expiresAt: true,
@@ -352,6 +364,9 @@ describe('RoomService', () => {
           code: room.code,
           vibe: room.vibe,
           name: room.name,
+          kind: room.kind,
+          inviteId: room.inviteId,
+          matchId: null,
           createdAt: room.createdAt,
           expiresAt: room.expiresAt,
           activeMemberCount: 1,

@@ -1,3 +1,5 @@
+import { ConversationControls } from "../../matching/conversation-controls";
+import { conversationStarters } from "../../matching/starters";
 import {
   useEffect,
   useCallback,
@@ -85,6 +87,7 @@ function RoomScreen({ code }: { code: string }) {
   );
   const [now, setNow] = useState(() => Date.now());
   const [draft, setDraft] = useState("");
+  const [showStarters, setShowStarters] = useState(false);
   const [inputHeight, setInputHeight] = useState(52);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   useEffect(() => {
@@ -232,16 +235,29 @@ function RoomScreen({ code }: { code: string }) {
             </View>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Leave Room"
+              accessibilityLabel={
+                state.details?.room.kind === "MATCHED"
+                  ? "End conversation"
+                  : "Leave Room"
+              }
               onPress={() => setModal("leave")}
               style={{ minHeight: 44, justifyContent: "center" }}
             >
               <Text style={{ color: palette.pink, fontWeight: "700" }}>
-                Leave
+                {state.details?.room.kind === "MATCHED" ? "End" : "Leave"}
               </Text>
             </Pressable>
           </View>
-          {!keyboardVisible && <RoomShare code={code} />}
+          {!keyboardVisible && state.details?.room.kind === "GROUP" && (
+            <RoomShare code={code} inviteId={state.details.room.inviteId} />
+          )}
+          {!keyboardVisible && state.details?.room.matchId && (
+            <ConversationControls
+              id={state.details.room.matchId}
+              controller={controller}
+              now={now}
+            />
+          )}
           {!keyboardVisible && (
             <View style={[styles.row, { justifyContent: "space-between" }]}>
               <View style={{ flex: 1, gap: 4 }}>
@@ -530,6 +546,38 @@ function RoomScreen({ code }: { code: string }) {
             borderColor: palette.line,
           }}
         >
+          {state.details?.room.kind === "MATCHED" && ready && (
+            <View style={{ gap: 6 }}>
+              <Button
+                label={
+                  showStarters
+                    ? "Hide conversation starters"
+                    : "Need a conversation starter?"
+                }
+                secondary
+                onPress={() => setShowStarters((value) => !value)}
+              />
+              {showStarters && (
+                <ScrollView
+                  horizontal
+                  keyboardShouldPersistTaps="handled"
+                  contentContainerStyle={{ gap: 8 }}
+                >
+                  {conversationStarters.map((starter) => (
+                    <Button
+                      key={starter}
+                      label={`Try: ${starter}`}
+                      secondary
+                      onPress={() => {
+                        setDraft(starter);
+                        setShowStarters(false);
+                      }}
+                    />
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          )}
           <View style={[styles.row, { alignItems: "flex-end" }]}>
             <TextInput
               accessibilityLabel="Message"
@@ -622,11 +670,16 @@ function RoomScreen({ code }: { code: string }) {
                 <>
                   <Text style={styles.title}>Slip away?</Text>
                   <Text style={styles.muted}>
-                    You can rejoin with {code} while the room is still open.
-                    Your ghost name and role will be waiting.
+                    {state.details?.room.kind === "MATCHED"
+                      ? "Ending closes this private conversation for both people. It cannot be rejoined."
+                      : `You can rejoin with ${code} while the room is still open. Your ghost name and role will be waiting.`}
                   </Text>
                   <Button
-                    label="Leave Room"
+                    label={
+                      state.details?.room.kind === "MATCHED"
+                        ? "End conversation"
+                        : "Leave Room"
+                    }
                     danger
                     busy={working}
                     onPress={() => {

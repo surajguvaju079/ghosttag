@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { PrismaService } from 'src/database/prisma/prisma.service';
-import { randomInt } from 'crypto';
+import { randomInt, randomUUID } from 'crypto';
 import type { Prisma, Room, RoomMembership } from 'generated/prisma/client';
 
 @Injectable()
@@ -43,6 +43,7 @@ export class RoomService {
           const room = await tx.room.create({
             data: {
               code,
+              inviteId: randomUUID(),
               vibe: dto.vibe,
               name: dto.name?.trim() || null,
               creatorId: userId,
@@ -90,48 +91,121 @@ export class RoomService {
     });
   }
 
-  async joinRoom(userId: string, code: string) {
+  async joinRoom(userId: string, code: string, inviteId?: string) {
     return this.prisma.$transaction(
-      async (tx) => {
-        const room = await this.lockAccessibleRoom(tx, code);
-        const membership = await tx.roomMembership.findUnique({
-          where: { userId_roomId: { userId, roomId: room.id } },
-        });
-
-        if (membership?.status === 'ACTIVE') {
-          return this.joinResponse(room, membership);
-        }
-
-        const activeMemberCount = await tx.roomMembership.count({
-          where: { roomId: room.id, status: 'ACTIVE' },
-        });
-        if (activeMemberCount >= this.maxCapacity) {
-          throw new ConflictException({
-            code: 'ROOM_FULL',
-            message: 'This room is full',
-          });
-        }
-
-        const activeMembership = membership
-          ? await tx.roomMembership.update({
-              where: { id: membership.id },
-              data: { status: 'ACTIVE', leftAt: null },
-            })
-          : await tx.roomMembership.create({
-              data: {
-                roomId: room.id,
-                userId,
-                role: 'MEMBER',
-                status: 'ACTIVE',
-                ghostName: this.generateGhostName(),
-                ghostAvatar: this.generateGhostAvatar(),
-              },
-            });
-
-        return this.joinResponse(room, activeMembership);
-      },
+      (tx) => this.joinInTransaction(tx, userId, code, inviteId),
       { isolationLevel: 'ReadCommitted' },
     );
+  }
+  private async joinInTransaction(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    code: string,
+    inviteId?: string,
+  ) {
+    const room = await this.lockAccessibleRoom(tx, code, 'exclusive', inviteId);
+    const membership = await tx.roomMembership.findUnique({
+      where: { userId_roomId: { userId, roomId: room.id } },
+    });
+
+    if (room.kind === 'MATCHED')
+      await this.assertMatchedParty(tx, room.id, userId);
+    if (membership?.status === 'ACTIVE') {
+      return this.joinResponse(room, membership);
+    }
+
+    const activeMemberCount = await tx.roomMembership.count({
+      where: { roomId: room.id, status: 'ACTIVE' },
+    });
+    if (activeMemberCount >= this.capacity(room)) {
+      throw new ConflictException({
+        code: 'ROOM_FULL',
+        message: 'This room is full',
+      });
+    }
+
+    const activeMembership = membership
+      ? await tx.roomMembership.update({
+          where: { id: membership.id },
+          data: { status: 'ACTIVE', leftAt: null },
+        })
+      : await tx.roomMembership.create({
+          data: {
+            roomId: room.id,
+            userId,
+            role: 'MEMBER',
+            status: 'ACTIVE',
+            ghostName: this.generateGhostName(),
+            ghostAvatar: this.generateGhostAvatar(),
+          },
+        });
+
+    return this.joinResponse(room, activeMembership);
+  }
+
+  async createMatchedRoom(
+    tx: Prisma.TransactionClient,
+    userAId: string,
+    userBId: string,
+  ) {
+    const now = new Date();
+    const room = await tx.room.create({
+      data: {
+        code: this.generateRoomCode(),
+        kind: 'MATCHED',
+        creatorId: userAId,
+        vibe: 'DEEP_TALK',
+        name: 'A little company',
+        createdAt: now,
+        expiresAt: new Date(now.getTime() + 900_000),
+      },
+    });
+    for (const [index, userId] of [userAId, userBId].entries()) {
+      await tx.roomMembership.create({
+        data: {
+          roomId: room.id,
+          userId,
+          role: index === 0 ? 'OWNER' : 'MEMBER',
+          ghostName: this.generateGhostName(),
+          ghostAvatar: this.generateGhostAvatar(),
+        },
+      });
+    }
+    await tx.matchSession.create({
+      data: { roomId: room.id, userAId, userBId },
+    });
+    return room;
+  }
+  async closeMatchedRoom(tx: Prisma.TransactionClient, roomId: string) {
+    const [room] = await tx.$queryRaw<
+      Room[]
+    >`SELECT * FROM "rooms" WHERE "id" = ${roomId}::uuid FOR UPDATE`;
+    if (room?.kind === 'MATCHED' && room.status !== 'EXPIRED') {
+      await tx.room.update({
+        where: { id: roomId },
+        data: {
+          status: 'EXPIRED',
+          expiresAt: new Date(Math.min(Date.now(), room.expiresAt.getTime())),
+        },
+      });
+    }
+  }
+  private async assertMatchedParty(
+    tx: Prisma.TransactionClient,
+    roomId: string,
+    userId: string,
+  ) {
+    const session = await tx.matchSession.findFirst({
+      where: { roomId, OR: [{ userAId: userId }, { userBId: userId }] },
+    });
+    if (!session)
+      throw new ForbiddenException({
+        code: 'PRIVATE_ROOM_ACCESS_REQUIRED',
+        message: 'This conversation is private.',
+      });
+  }
+  private capacity(room: Room) {
+    return room.kind === 'MATCHED' ? 2 : this.maxCapacity;
   }
 
   async leaveRoom(userId: string, code: string): Promise<void> {
@@ -146,6 +220,11 @@ export class RoomService {
             code: 'ROOM_MEMBERSHIP_REQUIRED',
             message: 'Room membership is required',
           });
+        }
+        if (room.kind === 'MATCHED') {
+          await this.assertMatchedParty(tx, room.id, userId);
+          await this.closeMatchedRoom(tx, room.id);
+          return { userId, code: room.code };
         }
         // Repeated leaves succeed without changing the original departure time.
         if (membership.status === 'LEFT') return { userId, code: room.code };
@@ -180,6 +259,9 @@ export class RoomService {
         room: {
           select: {
             code: true,
+            kind: true,
+            inviteId: true,
+            matchSession: { select: { publicId: true } },
             name: true,
             vibe: true,
             expiresAt: true,
@@ -189,10 +271,14 @@ export class RoomService {
       },
     });
     return {
-      rooms: memberships.map(({ room, status }) => ({
-        ...room,
-        membershipStatus: status,
-      })),
+      rooms: memberships.map(({ room, status }) => {
+        const { matchSession, ...details } = room;
+        return {
+          ...details,
+          matchId: matchSession?.publicId ?? null,
+          membershipStatus: status,
+        };
+      }),
     };
   }
 
@@ -207,12 +293,22 @@ export class RoomService {
         return {
           room: {
             code: room.code,
+            kind: room.kind ?? 'GROUP',
+            inviteId: room.inviteId ?? null,
+            matchId:
+              room.kind === 'MATCHED'
+                ? (
+                    await tx.matchSession.findUniqueOrThrow({
+                      where: { roomId: room.id },
+                    })
+                  ).publicId
+                : null,
             vibe: room.vibe,
             name: room.name,
             createdAt: room.createdAt,
             expiresAt: room.expiresAt,
             activeMemberCount,
-            maxCapacity: this.maxCapacity,
+            maxCapacity: this.capacity(room),
           },
           membership: this.publicIdentity(membership),
         };
@@ -232,7 +328,11 @@ export class RoomService {
           joinedAt: true,
         },
       });
-      return { members, total: members.length, maxCapacity: this.maxCapacity };
+      return {
+        members,
+        total: members.length,
+        maxCapacity: this.capacity(room),
+      };
     });
   }
 
@@ -276,6 +376,8 @@ export class RoomService {
     lock: 'shared' | 'exclusive' = 'shared',
   ) {
     const room = await this.lockAccessibleRoom(tx, code, lock);
+    if (room.kind === 'MATCHED')
+      await this.assertMatchedParty(tx, room.id, userId);
     const membership = await tx.roomMembership.findUnique({
       where: { userId_roomId: { userId, roomId: room.id } },
     });
@@ -298,12 +400,16 @@ export class RoomService {
     tx: Prisma.TransactionClient,
     code: string,
     lock: 'shared' | 'exclusive' = 'exclusive',
+    inviteId?: string,
   ) {
     const normalizedCode = code.trim().toUpperCase();
     // Shared read locks coexist and block the exclusive locks used by join/leave.
     // At READ COMMITTED, queries after the lock see the preceding writer's commit.
-    const [room] =
-      lock === 'shared'
+    const [room] = inviteId
+      ? await tx.$queryRaw<
+          Room[]
+        >`SELECT * FROM "rooms" WHERE "code" = ${normalizedCode} AND "inviteId" = ${inviteId}::uuid AND "kind" = 'GROUP' FOR UPDATE`
+      : lock === 'shared'
         ? await tx.$queryRaw<Room[]>`
           SELECT * FROM "rooms" WHERE "code" = ${normalizedCode} FOR SHARE
         `
@@ -323,7 +429,7 @@ export class RoomService {
   assertAccessible(room: Room): void {
     // Check time after acquiring the lock: a room may expire while we wait.
     const now = new Date();
-    if (room.expiresAt <= now) {
+    if (room.status === 'EXPIRED' || room.expiresAt <= now) {
       throw new GoneException({
         code: 'ROOM_EXPIRED',
         message: 'This room has expired',
@@ -410,7 +516,7 @@ export class RoomService {
     return avatars[randomInt(0, avatars.length)];
   }
 
-  private isRoomCodeConflict(error: unknown): boolean {
+  isRoomCodeConflict(error: unknown): boolean {
     if (
       typeof error !== 'object' ||
       error === null ||
@@ -428,7 +534,7 @@ export class RoomService {
 
     if (typeof meta !== 'object' || meta === null) return false;
     if ('target' in meta && Array.isArray(meta.target)) {
-      return meta.target.includes('code');
+      if (meta.target.includes('code')) return true;
     }
 
     // Prisma 7's pg adapter reports the constraint through driverAdapterError.
@@ -453,9 +559,10 @@ export class RoomService {
     return (
       typeof constraint === 'object' &&
       constraint !== null &&
-      'fields' in constraint &&
-      Array.isArray(constraint.fields) &&
-      constraint.fields.includes('code')
+      (('fields' in constraint &&
+        Array.isArray(constraint.fields) &&
+        constraint.fields.includes('code')) ||
+        ('index' in constraint && constraint.index === 'rooms_code_key'))
     );
   }
 }

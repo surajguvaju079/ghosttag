@@ -27,6 +27,7 @@ export class RetentionService {
     );
   }
   async sweep() {
+    await this.repository.cleanupSearches();
     const cutoff = new Date(Date.now() - this.graceMs);
     let completed = 0;
     while (

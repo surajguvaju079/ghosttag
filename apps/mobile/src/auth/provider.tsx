@@ -17,9 +17,9 @@ import { ActivityIndicator, AppState, View } from "react-native";
 function createRuntime() {
   try {
     const config = configuration(
-      "https://api-ghosttag.vyomnix.com/api/v1",
+      "https://trouble-undoing-annex.ngrok-free.dev/api/v1",
 
-      "https://api-ghosttag.vyomnix.com",
+      "https://trouble-undoing-annex.ngrok-free.dev",
     );
     let session: Session;
     const api = new ApiClient(

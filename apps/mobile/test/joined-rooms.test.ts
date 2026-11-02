@@ -8,6 +8,9 @@ import {
   visibleRooms,
 } from "../src/rooms/joined-rooms";
 const room: JoinedRoom = {
+  kind: "GROUP",
+  inviteId: "11111111-1111-4111-8111-111111111111",
+  matchId: null,
   code: "GH-1234",
   name: "Room",
   vibe: "CHAOS",

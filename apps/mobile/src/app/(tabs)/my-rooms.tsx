@@ -126,7 +126,9 @@ export default function MyRooms() {
                         locked
                           ? "Temporarily locked"
                           : status === "ACTIVE"
-                            ? "Open"
+                            ? room.kind === "MATCHED"
+                              ? "Resume"
+                              : "Open"
                             : "Rejoin"
                       }
                       busy={state.workingCode === room.code}
@@ -135,7 +137,9 @@ export default function MyRooms() {
                       }
                       onPress={() => void enter(room)}
                     />
-                    <RoomShare code={room.code} />
+                    {room.kind !== "MATCHED" && (
+                      <RoomShare code={room.code} inviteId={room.inviteId} />
+                    )}
                   </View>
                 );
               })}

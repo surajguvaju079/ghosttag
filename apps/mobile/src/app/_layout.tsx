@@ -1,3 +1,7 @@
+import {
+  InviteListener,
+  PendingInviteNavigation,
+} from "../linking/pending-invite";
 import { DarkTheme, Stack, ThemeProvider } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
@@ -18,6 +22,7 @@ export default function RootLayout() {
         }}
       >
         <StatusBar style="light" />
+        <InviteListener />
         <SessionProvider>
           <Stack
             screenOptions={{
@@ -25,6 +30,7 @@ export default function RootLayout() {
               contentStyle: { backgroundColor: palette.bg },
             }}
           />
+          <PendingInviteNavigation />
         </SessionProvider>
       </ThemeProvider>
     </SafeAreaProvider>

@@ -77,7 +77,10 @@ describe('Retention scheduling and recovery', () => {
     await runner.onModuleDestroy();
   });
   it('limits work per sweep and reevaluates the persisted timestamp cutoff each time', async () => {
-    const repository = { chunk: jest.fn().mockResolvedValue(true) };
+    const repository = {
+      cleanupSearches: jest.fn().mockResolvedValue(0),
+      chunk: jest.fn().mockResolvedValue(true),
+    };
     const config = new ConfigService({
       RETENTION_BATCH_SIZE: 2,
       RETENTION_CHUNKS_PER_SWEEP: 3,

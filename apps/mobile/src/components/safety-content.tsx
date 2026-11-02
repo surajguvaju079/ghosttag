@@ -73,8 +73,11 @@ export default function Safety({
           </Text>
           <Text>
             Start fresh replaces the credential on this device. It does not
-            delete the previous identity or its server data. In-app identity
-            deletion and participant blocking are not currently available.
+            delete the previous identity or its server data. You can block a
+            person after a private match to prevent future matching with that
+            identity, and clear your own blocks from Find company. Blocks do not
+            apply to group rooms. In-app identity deletion is not currently
+            available.
           </Text>
         </View>
         {policies.map(([label, value]) => (

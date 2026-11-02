@@ -53,6 +53,9 @@ const ghost = {
 };
 const details: RoomDetails = {
   room: {
+    kind: "GROUP",
+    inviteId: "11111111-1111-4111-8111-111111111111",
+    matchId: null,
     code: "GH-1234",
     name: "Night thoughts",
     vibe: "DEEP_TALK",
@@ -323,6 +326,7 @@ function harness(
   let index = 0;
   let invalidations = 0;
   const socialFailures: string[] = [];
+  let currentDetails = details;
   const sockets: FakeSocket[] = [];
   const historyCalls: (string | undefined)[] = [];
   const reports: unknown[] = [];
@@ -332,7 +336,7 @@ function harness(
   const api = {
     details: async () => {
       if (detailsError) throw detailsError;
-      return details;
+      return currentDetails;
     },
     members: async () => ({
       members: [{ ...ghost, joinedAt: new Date().toISOString() }],
@@ -384,6 +388,9 @@ function harness(
     joins,
     invalidations: () => invalidations,
     socialFailures,
+    setDetails: (value: RoomDetails) => {
+      currentDetails = value;
+    },
     setReportError: (error?: ApiError) => {
       reportError = error;
     },
@@ -956,3 +963,39 @@ for (const code of [
     }
   });
 }
+
+test("a server-confirmed matched-room extension recovers a local deadline without accepting another room incarnation", async () => {
+  const h = harness();
+  const original: RoomDetails = {
+    ...details,
+    room: {
+      ...details.room,
+      kind: "MATCHED",
+      inviteId: null,
+      matchId: `c_${"a".repeat(32)}`,
+    },
+  };
+  h.setDetails(original);
+  try {
+    await h.controller.start();
+    await tick();
+    h.controller.expire();
+    h.setDetails({
+      ...original,
+      room: { ...original.room, createdAt: new Date(0).toISOString() },
+    });
+    await h.controller.refreshMatchedRoom();
+    assert.equal(h.controller.state.status, "expired");
+    const deadline = new Date(Date.now() + 1800000).toISOString();
+    h.setDetails({
+      ...original,
+      room: { ...original.room, expiresAt: deadline },
+    });
+    await h.controller.refreshMatchedRoom();
+    await tick();
+    assert.equal(h.controller.state.status, "ready");
+    assert.equal(h.controller.state.details?.room.expiresAt, deadline);
+  } finally {
+    h.controller.dispose();
+  }
+});

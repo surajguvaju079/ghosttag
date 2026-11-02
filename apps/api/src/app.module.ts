@@ -1,3 +1,4 @@
+import { MatchingModule } from './matching/matching.module';
 import { RetentionModule } from './retention/retention.module';
 import { SafetyModule } from './safety/safety.module';
 import { MessageModule } from './message/message.module';
@@ -11,6 +12,7 @@ import { RoomModule } from './room/room.module';
 
 @Module({
   imports: [
+    MatchingModule,
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],

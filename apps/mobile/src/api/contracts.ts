@@ -3,6 +3,9 @@ export type Vibe = "DEEP_TALK" | "CHAOS" | "RANT_ZONE" | "GAMER_LOBBY";
 export type Role = "OWNER" | "MEMBER";
 export type Ghost = { ghostName: string; ghostAvatar: string; role: Role };
 export type Room = {
+  kind: "GROUP" | "MATCHED";
+  inviteId: string | null;
+  matchId: string | null;
   code: string;
   name: string | null;
   vibe: Vibe;
@@ -56,7 +59,10 @@ export type Failure = {
 };
 export type Ack<T> = { ok: true; data: T } | { ok: false; error: Failure };
 
-export type JoinedRoom = Pick<Room, "code" | "name" | "vibe" | "expiresAt"> & {
+export type JoinedRoom = Pick<
+  Room,
+  "code" | "name" | "vibe" | "expiresAt" | "kind" | "inviteId" | "matchId"
+> & {
   lockedUntil: string | null;
   membershipStatus: "ACTIVE" | "LEFT";
 };
@@ -76,3 +82,19 @@ export const ageAccessCodes = [
   "AGE_INELIGIBLE",
   "SOCIAL_ACCESS_DISABLED",
 ];
+
+export type MatchSession = {
+  id: string;
+  code: string;
+  expiresAt: string;
+  extended: boolean;
+  extensionRequested: boolean;
+  partnerRequested: boolean;
+};
+export type MatchState = {
+  status: "IDLE" | "WAITING" | "MATCHED";
+  matchingEnabled: boolean;
+  blockedCount: number;
+  search: { id: string; expiresAt: string; leaseUntil: string } | null;
+  session: MatchSession | null;
+};

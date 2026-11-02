@@ -203,6 +203,31 @@ export class RoomSession {
       [cooldown]: Math.max(this.state[cooldown], failure.retryAt),
     });
   }
+  async refreshMatchedRoom() {
+    const epoch = this.epoch;
+    try {
+      const details = await this.api.details(this.token, this.code);
+      if (
+        epoch !== this.epoch ||
+        details.room.kind !== "MATCHED" ||
+        !this.state.details ||
+        details.room.matchId !== this.state.details.room.matchId ||
+        details.room.createdAt !== this.state.details.room.createdAt ||
+        Date.parse(details.room.expiresAt) <= Date.now()
+      )
+        return;
+      const expired = this.state.status === "expired";
+      this.patch({ details });
+      if (expired) {
+        this.historyLoaded = false;
+        this.historyAnchor = undefined;
+        this.patch({ status: "offline", error: undefined });
+        await this.start();
+      }
+    } catch (error) {
+      if (epoch === this.epoch) this.fail(error);
+    }
+  }
   async start() {
     if (
       this.state.details &&

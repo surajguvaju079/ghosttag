@@ -1,3 +1,4 @@
+import { inviteLink } from "../linking/invites";
 import { asApiError, type ApiClient } from "../api/client";
 import type { JoinedRoom } from "../api/contracts";
 
@@ -102,6 +103,8 @@ export class JoinedRoomsController {
 export function visibleRooms(rooms: JoinedRoom[], now: number) {
   return rooms.filter((room) => Date.parse(room.expiresAt) > now);
 }
-export function inviteMessage(code: string) {
-  return `Join me on GhostTag! Room code: ${code}. Open GhostTag and enter this code.`;
+export function inviteMessage(code: string, inviteId?: string | null) {
+  return inviteId
+    ? `Join me on GhostTag! ${inviteLink(code, inviteId)} Room code: ${code}.`
+    : `Join me on GhostTag! Room code: ${code}. Open GhostTag and enter this code.`;
 }

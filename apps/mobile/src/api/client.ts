@@ -2,6 +2,7 @@ import { ageAccessCodes } from "./contracts";
 import type {
   Failure,
   IdentityStatus,
+  MatchState,
   JoinedRooms,
   Ghost,
   History,
@@ -72,6 +73,14 @@ export function configuration(
   };
 }
 const messages: Record<string, string> = {
+  MATCHING_DISABLED:
+    "Finding company is not available yet. Please check back later.",
+  INVALID_MATCH_SEARCH: "This search is unavailable. Start a new search.",
+  MATCH_NOT_FOUND: "This conversation is no longer available.",
+  PRIVATE_ROOM_ACCESS_REQUIRED:
+    "Only the two matched people can enter this conversation.",
+  INVALID_ROOM_INVITE:
+    "This invitation is not valid. Ask your friend for a new link.",
   INVALID_BIRTH_DATE: "Enter a valid birth date in YYYY-MM-DD format.",
   ELIGIBILITY_UNAVAILABLE:
     "Age screening is unavailable. Please try again later.",
@@ -207,6 +216,65 @@ export class ApiClient {
       });
     }
     return result;
+  }
+  matchingState(token: string) {
+    return this.request<MatchState>("/matching/state", token);
+  }
+  startMatch(token: string) {
+    return this.request<MatchState>(
+      "/matching/search",
+      token,
+      { language: "en" },
+      "POST",
+    );
+  }
+  heartbeatMatch(token: string, id: string) {
+    return this.request<MatchState>(
+      `/matching/search/${encodeURIComponent(id)}/heartbeat`,
+      token,
+      undefined,
+      "POST",
+    );
+  }
+  cancelMatch(token: string, id: string) {
+    return this.request<MatchState>(
+      `/matching/search/${encodeURIComponent(id)}`,
+      token,
+      undefined,
+      "DELETE",
+    );
+  }
+  matchAction(token: string, id: string, action: "extend" | "end" | "block") {
+    return this.request<MatchState>(
+      `/matching/sessions/${encodeURIComponent(id)}/${action}`,
+      token,
+      undefined,
+      "POST",
+    );
+  }
+  clearMatchBlocks(token: string) {
+    return this.request<MatchState>(
+      "/matching/blocks",
+      token,
+      undefined,
+      "DELETE",
+    );
+  }
+  async joinInvite(token: string, code: string, inviteId: string) {
+    if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(inviteId))
+      throw new ApiError({
+        statusCode: 400,
+        code: "INVALID_ROOM_INVITE",
+        message: "Invalid invite",
+      });
+    const normalized = normalizeCode(code);
+    await this.request(
+      `/rooms/${normalized}/invites/${inviteId}/join`,
+      token,
+      undefined,
+      "POST",
+    );
+    return normalized;
   }
   async createRoom(token: string, vibe: Vibe, name: string) {
     // Select only public fields; legacy create currently also returns an internal UUID.

@@ -192,6 +192,9 @@ describe('Room membership HTTP + PostgreSQL integration', () => {
       rooms: [
         {
           code,
+          kind: 'GROUP',
+          inviteId: expect.any(String) as string,
+          matchId: null,
           name: 'Test room',
           vibe: 'DEEP_TALK',
           expiresAt: expect.any(String) as string,
@@ -515,6 +518,9 @@ describe('Room membership HTTP + PostgreSQL integration', () => {
           code,
           vibe: 'DEEP_TALK',
           name: 'Test room',
+          kind: 'GROUP',
+          inviteId: room.inviteId,
+          matchId: null,
           createdAt: room.createdAt.toISOString(),
           expiresAt: room.expiresAt.toISOString(),
           activeMemberCount: 1,

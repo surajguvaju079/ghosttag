@@ -28,6 +28,21 @@ export type Message = {
   text: string;
   createdAt: string;
   author: { participantId: string; ghostName: string; ghostAvatar: string };
+  replyTo?: {
+    messageId: string;
+    text: string;
+    author: { participantId: string; ghostName: string; ghostAvatar: string };
+  };
+  reactions?: { type: ReactionType; count: number; mine: boolean }[];
+};
+export const REACTIONS = ["FIRE", "LAUGH", "SHOCK", "MIND_BLOWN"] as const;
+export type ReactionType = (typeof REACTIONS)[number];
+export type ReactionUpdate = {
+  code: string;
+  messageId: string;
+  type: ReactionType;
+  count: number;
+  mine: boolean;
 };
 export type History = { messages: Message[]; nextCursor: string | null };
 export type Participant = Ghost & { participantId: string };

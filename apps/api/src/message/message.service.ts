@@ -1,6 +1,10 @@
 import { AgeEligibilityService } from 'src/identity/age-eligibility.service';
 import { RateLimitService } from 'src/safety/rate-limit.service';
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Prisma, Room, RoomMembership } from 'generated/prisma/client';
 import {
   IdentityCredentialService,
@@ -8,11 +12,16 @@ import {
 } from 'src/common/auth/identity-credential.service';
 import { PrismaService } from 'src/database/prisma/prisma.service';
 import { RoomService } from 'src/room/room.service';
-import { MessageRepository } from './message.repository';
-import { historyQuery, roomCode, sendPayload } from './message.validation';
+import { MessageRepository, messageInclude } from './message.repository';
+import {
+  historyQuery,
+  reactionPayload,
+  roomCode,
+  sendPayload,
+} from './message.validation';
 
 type StoredMessage = Prisma.MessageGetPayload<{
-  include: { membership: true };
+  include: typeof messageInclude;
 }>;
 export interface MessageAccess {
   tx: Prisma.TransactionClient;
@@ -73,7 +82,11 @@ export class MessageService {
           membership.id,
           input.clientMessageId,
         );
-        if (previous && previous.text !== input.text) {
+        if (
+          previous &&
+          (previous.text !== input.text ||
+            previous.replyTo?.publicId !== input.replyToMessageId)
+        ) {
           throw new ConflictException({
             code: 'IDEMPOTENCY_CONFLICT',
             message: 'Retry key was already used with different text',
@@ -81,6 +94,19 @@ export class MessageService {
         }
         this.assertLive({ room, credential });
         if (!previous) this.rates.consume('MESSAGE_BURST', credential.userId);
+        const target =
+          input.replyToMessageId && !previous
+            ? await this.repository.findPublic(
+                tx,
+                room.id,
+                input.replyToMessageId,
+              )
+            : undefined;
+        if (input.replyToMessageId && !previous && !target)
+          throw new NotFoundException({
+            code: 'MESSAGE_NOT_FOUND',
+            message: 'Reply target not found',
+          });
         const stored =
           previous ??
           (await this.repository.create(
@@ -89,10 +115,11 @@ export class MessageService {
             membership.id,
             input.text,
             input.clientMessageId,
+            target?.id,
           ));
         this.assertLive({ room, credential });
         return {
-          message: this.publicMessage(stored, room.code),
+          message: this.publicMessage(stored, room.code, membership.id),
           replayed: !!previous,
           clientMessageId: input.clientMessageId,
         };
@@ -120,25 +147,38 @@ export class MessageService {
       );
       if (!stored) return;
       this.assertLive(access);
-      return action(access, this.publicMessage(stored, access.room.code));
+      return action(
+        access,
+        this.publicMessage(stored, access.room.code, access.membership.id),
+      );
     });
   }
 
   history(hash: string, code: string, query: unknown) {
     const { limit, before } = historyQuery(query);
-    return this.access(hash, code, async ({ tx, room, credential }) => {
-      const rows = await this.repository.history(tx, room.id, limit, before);
-      const hasMore = rows.length > limit;
-      const page = rows.slice(0, limit);
-      this.assertLive({ room, credential });
-      return {
-        messages: page.map((row) => this.publicMessage(row, room.code)),
-        nextCursor: hasMore ? page[page.length - 1].publicId : null,
-      };
-    });
+    return this.access(
+      hash,
+      code,
+      async ({ tx, room, membership, credential }) => {
+        const rows = await this.repository.history(tx, room.id, limit, before);
+        const hasMore = rows.length > limit;
+        const page = rows.slice(0, limit);
+        this.assertLive({ room, credential });
+        return {
+          messages: page.map((row) =>
+            this.publicMessage(row, room.code, membership.id),
+          ),
+          nextCursor: hasMore ? page[page.length - 1].publicId : null,
+        };
+      },
+    );
   }
 
-  private publicMessage(message: StoredMessage, code: string) {
+  private publicMessage(
+    message: StoredMessage,
+    code: string,
+    membershipId?: string,
+  ) {
     return {
       messageId: message.publicId,
       code,
@@ -149,6 +189,110 @@ export class MessageService {
         ghostName: message.membership.ghostName,
         ghostAvatar: message.membership.ghostAvatar,
       },
+      ...(message.replyTo
+        ? {
+            replyTo: {
+              messageId: message.replyTo.publicId,
+              text: message.replyTo.text,
+              author: {
+                participantId: message.replyTo.membership.publicId,
+                ghostName: message.replyTo.membership.ghostName,
+                ghostAvatar: message.replyTo.membership.ghostAvatar,
+              },
+            },
+          }
+        : {}),
+      ...(message.reactions.length
+        ? {
+            reactions: ['FIRE', 'LAUGH', 'SHOCK', 'MIND_BLOWN']
+              .map((type) => ({
+                type,
+                count: message.reactions.filter(
+                  (reaction) => reaction.type === type,
+                ).length,
+                mine: message.reactions.some(
+                  (reaction) =>
+                    reaction.type === type &&
+                    reaction.membershipId === membershipId,
+                ),
+              }))
+              .filter((reaction) => reaction.count > 0),
+          }
+        : {}),
     };
+  }
+
+  react(hash: string, value: unknown) {
+    const input = reactionPayload(value);
+    return this.access(
+      hash,
+      input.code,
+      async ({ tx, room, membership }) => {
+        const message = await this.repository.findPublic(
+          tx,
+          room.id,
+          input.messageId,
+        );
+        if (!message)
+          throw new NotFoundException({
+            code: 'MESSAGE_NOT_FOUND',
+            message: 'Message not found',
+          });
+        const where = {
+          messageId_membershipId_type: {
+            messageId: message.id,
+            membershipId: membership.id,
+            type: input.type,
+          },
+        };
+        const existing = await tx.reaction.findUnique({
+          where,
+          select: { id: true },
+        });
+        if (existing) await tx.reaction.delete({ where });
+        else
+          await tx.reaction.create({
+            data: {
+              messageId: message.id,
+              membershipId: membership.id,
+              type: input.type,
+            },
+          });
+        const count = await tx.reaction.count({
+          where: { messageId: message.id, type: input.type },
+        });
+        return {
+          code: room.code,
+          messageId: message.publicId,
+          type: input.type,
+          count,
+          mine: !existing,
+        };
+      },
+      true,
+    );
+  }
+
+  reactionSnapshot(
+    hash: string,
+    code: string,
+    messageId: string,
+    type: 'FIRE' | 'LAUGH' | 'SHOCK' | 'MIND_BLOWN',
+  ) {
+    return this.access(hash, code, async ({ tx, room, membership }) => {
+      const message = await this.repository.findPublic(tx, room.id, messageId);
+      if (!message) return;
+      const rows = await tx.reaction.findMany({
+        where: { messageId: message.id, type },
+        select: { membershipId: true },
+      });
+      return {
+        code: room.code,
+        messageId,
+        type,
+        count: rows.length,
+        mine: rows.some((row) => row.membershipId === membership.id),
+      };
+    });
   }
 }

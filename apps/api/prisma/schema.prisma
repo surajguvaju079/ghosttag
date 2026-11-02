@@ -154,6 +154,7 @@ model RoomMembership {
 model Message {
   publicId        String   @unique @default(dbgenerated("('m_'::text || replace((gen_random_uuid())::text, '-'::text, ''::text))")) @db.VarChar(34)
   clientMessageId String?  @db.VarChar(36)
+  replyToId       String?  @db.Uuid
   id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   roomId          String   @db.Uuid
   membershipId    String   @db.Uuid
@@ -164,6 +165,8 @@ model Message {
   membership RoomMembership  @relation(fields: [membershipId], references: [id], onDelete: Cascade)
   reactions  Reaction[]
   reports    MessageReport[]
+  replyTo    Message? @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies    Message[] @relation("MessageReply")
 
   @@unique([membershipId, clientMessageId])
   @@index([roomId, createdAt, publicId])

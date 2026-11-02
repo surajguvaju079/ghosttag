@@ -96,7 +96,10 @@ an edited draft or generates a replacement key. Retries are not automatically se
 following reconnection. Pending sends do not survive process termination; messages
 that committed are recovered through history. The UI renders plain React Native
 text and validates nonblank text, the 2,000 UTF-16-unit maximum, NULs and lone
-surrogates. Server validation remains authoritative.
+surrogates. Pasting a longer draft does not silently truncate it: the composer
+offers explicit Send first part and retains the remaining text for another send.
+Each part still obeys the existing message contract. Server validation remains
+authoritative.
 
 Reporting is a two-step reason selection and confirmation using only the current
 room code, public message ID and documented reason. Success is local feedback;
@@ -161,10 +164,11 @@ history is persisted on the device. Existing native credentials restore membersh
 across restarts, including memberships predating this UI. Start fresh does not
 restore prior memberships, and browser preview remains memory-only.
 
-Chat keyboard avoidance wraps safe-area content, with iOS padding and Android's
-configured window resize. The list can shrink; composer text grows up to 130 points
+Chat keyboard avoidance wraps safe-area content, with iOS padding and Android height
+adjustment alongside the configured window resize. The list can shrink; composer text grows up to 130 points
 and scrolls internally afterward. Secondary header details and sharing controls
-hide while typing, and pending rows shrink to preserve composer space. Layout
+hide while typing, the composer drops its bottom safe-area inset and helper text,
+and pending rows shrink to preserve composer space. Layout
 changes follow the latest message only when already near the latest messages.
 Native keyboard and cursor behavior still require device acceptance checks.
 

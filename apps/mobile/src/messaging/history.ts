@@ -28,3 +28,10 @@ export function validText(text: string) {
     !/[\uD800-\uDFFF]/u.test(text)
   );
 }
+
+export function firstMessagePart(text: string) {
+  let end = Math.min(text.length, 2000);
+  // Keep a pasted emoji's UTF-16 pair together at the message boundary.
+  if (end < text.length && /[\uD800-\uDBFF]/.test(text[end - 1])) end -= 1;
+  return text.slice(0, end);
+}

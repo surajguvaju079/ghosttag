@@ -27,7 +27,12 @@ export function payload(
 }
 
 export function sendPayload(value: unknown) {
-  const object = payload(value, ['code', 'text', 'clientMessageId']);
+  const object = payload(value, [
+    'code',
+    'text',
+    'clientMessageId',
+    'replyToMessageId',
+  ]);
   const code = roomCode(object.code);
   const { text, clientMessageId } = object;
   if (
@@ -45,7 +50,36 @@ export function sendPayload(value: unknown) {
     )
   )
     invalid();
-  return { code, text, clientMessageId: clientMessageId.toLowerCase() };
+  const replyToMessageId = object.replyToMessageId;
+  if (
+    replyToMessageId !== undefined &&
+    (typeof replyToMessageId !== 'string' ||
+      !/^m_[0-9a-f]{32}$/.test(replyToMessageId))
+  )
+    invalid('INVALID_REPLY_TARGET', 'Invalid reply target');
+  return {
+    code,
+    text,
+    clientMessageId: clientMessageId.toLowerCase(),
+    ...(replyToMessageId ? { replyToMessageId } : {}),
+  };
+}
+
+export function reactionPayload(value: unknown) {
+  const object = payload(value, ['code', 'messageId', 'type']);
+  const code = roomCode(object.code);
+  if (
+    typeof object.messageId !== 'string' ||
+    !/^m_[0-9a-f]{32}$/.test(object.messageId)
+  )
+    invalid('MESSAGE_NOT_FOUND', 'Message not found');
+  if (!['FIRE', 'LAUGH', 'SHOCK', 'MIND_BLOWN'].includes(String(object.type)))
+    invalid('INVALID_REACTION', 'Invalid reaction');
+  return {
+    code,
+    messageId: object.messageId,
+    type: object.type as 'FIRE' | 'LAUGH' | 'SHOCK' | 'MIND_BLOWN',
+  };
 }
 
 export function historyQuery(query: unknown) {

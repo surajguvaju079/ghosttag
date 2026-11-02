@@ -97,6 +97,10 @@ optional for sending; subscribe to receive pushes. Text is plain text, nonblank,
 and at most 2,000 UTF-16 code units (the JavaScript string length). NUL characters and unpaired UTF-16 surrogates are rejected for PostgreSQL text compatibility. Whitespace is
 preserved; clients render text safely as text, never executable markup. A UUIDv4
 `clientMessageId` is mandatory; generate once per logical send and reuse on retries.
+Optional `replyToMessageId` is a public message ID from the same room. The server
+rejects missing or cross-room targets and binds the target to the retry key.
+Successful message payloads include `replyTo` with the target's public ID, text and
+room-scoped author. Reply text is rendered as plain text.
 UUID letter case is normalized. No user ID, author, membership ID or timestamp is
 accepted from the client.
 
@@ -109,6 +113,20 @@ succeeded. Persistence commits before success or any push. A timeout does not me
 the insert failed: retry the original key or recover through history.
 
 ## Server events
+
+### `message:react`
+
+Send `{ "code": "GH-4829", "messageId": "m_...", "type": "FIRE" }` to toggle
+one reaction. Types are `FIRE`, `LAUGH`, `SHOCK`, and `MIND_BLOWN`. The ack returns
+`{ code, messageId, type, count, mine }`; `mine` reflects the caller's membership.
+Only an active member of an accessible room can react. A missing or cross-room
+message is rejected. Each reaction type can be toggled independently.
+
+### `message:reaction`
+
+Subscribed authorized sockets receive the same reaction summary with `mine`
+computed for their own membership. History returns authoritative reaction counts
+and selections after reconnect. No internal membership IDs are exposed.
 
 ### `message:created`
 

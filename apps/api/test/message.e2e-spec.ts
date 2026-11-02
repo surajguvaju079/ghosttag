@@ -26,6 +26,8 @@ interface PublicMessage {
   text: string;
   createdAt: string;
   author: { participantId: string; ghostName: string; ghostAvatar: string };
+  replyTo?: { messageId: string; text: string };
+  reactions?: { type: string; count: number; mine: boolean }[];
 }
 interface Reply<T> {
   ok: boolean;
@@ -306,6 +308,78 @@ describe('Real-time messaging + PostgreSQL', () => {
       owner.token,
     ])
       expect(publicJson).not.toContain(hidden);
+  });
+
+  it('persists a same-room reply and rejects a cross-room target', async () => {
+    const sender = await connect();
+    const original = await send(sender, 'First message');
+    const reply = await ack<SendData>(sender, 'message:send', {
+      code,
+      text: 'Reply text',
+      clientMessageId: randomUUID(),
+      replyToMessageId: original.data.message.messageId,
+    });
+    expect(reply).toMatchObject({
+      ok: true,
+      data: {
+        message: {
+          replyTo: {
+            messageId: original.data.message.messageId,
+            text: 'First message',
+          },
+        },
+      },
+    });
+    const page = await history();
+    expect(
+      (page.body as { messages: PublicMessage[] }).messages[0].replyTo
+        ?.messageId,
+    ).toBe(original.data.message.messageId);
+    const other = await rooms.createRoom(owner.identityId, { vibe: 'CHAOS' });
+    const denied = await ack<SendData>(sender, 'message:send', {
+      code: other.code,
+      text: 'Wrong room',
+      clientMessageId: randomUUID(),
+      replyToMessageId: original.data.message.messageId,
+    });
+    expect(denied).toMatchObject({
+      ok: false,
+      error: { code: 'MESSAGE_NOT_FOUND' },
+    });
+  });
+
+  it('toggles each member reaction and broadcasts current counts', async () => {
+    const sender = await connect();
+    const receiver = await connect(member.token);
+    await subscribe(sender);
+    await subscribe(receiver);
+    const original = await send(sender);
+    const messageId = original.data.message.messageId;
+    const pushed = event<{ count: number; mine: boolean }>(
+      receiver,
+      'message:reaction',
+    );
+    const added = await ack(sender, 'message:react', {
+      code,
+      messageId,
+      type: 'FIRE',
+    });
+    expect(added).toMatchObject({ ok: true, data: { count: 1, mine: true } });
+    expect(await pushed).toMatchObject({ count: 1, mine: false });
+    const page = await history();
+    expect(
+      (page.body as { messages: PublicMessage[] }).messages[0].reactions,
+    ).toEqual([{ type: 'FIRE', count: 1, mine: true }]);
+    const removed = await ack(sender, 'message:react', {
+      code,
+      messageId,
+      type: 'FIRE',
+    });
+    expect(removed).toMatchObject({
+      ok: true,
+      data: { count: 0, mine: false },
+    });
+    expect(await prisma.reaction.count()).toBe(0);
   });
 
   it('distinguishes identical ghost names and isolates the same identity across rooms', async () => {

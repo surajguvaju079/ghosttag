@@ -229,6 +229,43 @@ export class MessageGateway
     });
   }
 
+  @SubscribeMessage('message:react')
+  react(@ConnectedSocket() socket: Socket, @MessageBody() value: unknown) {
+    return this.run(socket, async (state) => {
+      this.rates.consume('MESSAGE_SEND', state.userId, state.network);
+      const result = await this.messages.react(state.hash, value);
+      await Promise.all(
+        [...this.connections.values()].map(async (recipient) => {
+          const subscription = recipient.rooms.get(result.code);
+          if (!subscription) return;
+          try {
+            const snapshot = await this.messages.reactionSnapshot(
+              recipient.hash,
+              result.code,
+              result.messageId,
+              result.type,
+            );
+            if (
+              !snapshot ||
+              !recipient.socket.connected ||
+              recipient.rooms.get(result.code) !== subscription
+            )
+              return;
+            recipient.socket.volatile.emit('message:reaction', snapshot);
+          } catch (error) {
+            this.invalidate(
+              recipient,
+              result.code,
+              subscription,
+              publicSocketError(error),
+            );
+          }
+        }),
+      );
+      return result;
+    });
+  }
+
   private async run<T>(
     socket: Socket,
     action: (state: ConnectionState) => Promise<T>,

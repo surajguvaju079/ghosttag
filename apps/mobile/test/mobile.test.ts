@@ -15,7 +15,12 @@ import type {
   IdentityStatus,
 } from "../src/api/contracts";
 import { Session, type CredentialStore } from "../src/auth/session";
-import { mergeLive, unique, validText } from "../src/messaging/history";
+import {
+  firstMessagePart,
+  mergeLive,
+  unique,
+  validText,
+} from "../src/messaging/history";
 import type { Transport } from "../src/messaging/transport";
 import { RoomSession } from "../src/rooms/room-session";
 
@@ -268,6 +273,18 @@ test("room lifecycle errors have specific safe user messages", () => {
     assert.ok(!text.includes("Something went wrong"));
   }
 });
+test("a long pasted draft keeps every character across message parts", () => {
+  const pasted = "a".repeat(1999) + "👻" + "b".repeat(2000);
+  const first = firstMessagePart(pasted);
+  const second = firstMessagePart(pasted.slice(first.length));
+  const third = pasted.slice(first.length + second.length);
+  assert.equal(first.length, 1999);
+  assert.equal(validText(first), true);
+  assert.equal(validText(second), true);
+  assert.equal(validText(third), true);
+  assert.equal(first + second + third, pasted);
+});
+
 test("history deduplicates IDs, retains authoritative page order, and orders live events", () => {
   assert.deepEqual(
     unique([message(3), message(2), message(3)]).map((item) => item.messageId),
@@ -417,6 +434,39 @@ test("room bootstrap subscribes, loads membership/history, ignores cross-room pu
     assert.equal(h.historyCalls[1], message(2).messageId);
     assert.equal(h.controller.state.messages.length, 3);
     assert.equal(h.controller.state.nextCursor, null);
+  } finally {
+    h.controller.dispose();
+  }
+});
+test("reply send keeps its target and live reactions update only the addressed message", async () => {
+  const h = harness();
+  try {
+    await h.controller.start();
+    await tick();
+    await h.controller.send("reply text", undefined, message(1).messageId);
+    const sent = h.sockets[0].calls.find(
+      (call) => call.event === "message:send",
+    );
+    assert.equal(sent?.payload.replyToMessageId, message(1).messageId);
+    h.sockets[0].emit("message:reaction", {
+      code: "GH-1234",
+      messageId: message(1).messageId,
+      type: "FIRE",
+      count: 2,
+      mine: true,
+    });
+    assert.deepEqual(
+      h.controller.state.messages.find(
+        (item) => item.messageId === message(1).messageId,
+      )?.reactions,
+      [{ type: "FIRE", count: 2, mine: true }],
+    );
+    assert.equal(
+      h.controller.state.messages.find(
+        (item) => item.messageId === message(2).messageId,
+      )?.reactions,
+      undefined,
+    );
   } finally {
     h.controller.dispose();
   }

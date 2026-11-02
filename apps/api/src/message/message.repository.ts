@@ -5,12 +5,18 @@ import {
 } from '@nestjs/common';
 import type { Prisma } from 'generated/prisma/client';
 
+export const messageInclude = {
+  membership: true,
+  replyTo: { include: { membership: true } },
+  reactions: true,
+} as const;
+
 @Injectable()
 export class MessageRepository {
   findPublic(tx: Prisma.TransactionClient, roomId: string, publicId: string) {
     return tx.message.findUnique({
       where: { publicId, roomId },
-      include: { membership: true },
+      include: messageInclude,
     });
   }
 
@@ -45,7 +51,7 @@ export class MessageRepository {
       where: {
         membershipId_clientMessageId: { membershipId, clientMessageId },
       },
-      include: { membership: true },
+      include: messageInclude,
     });
   }
 
@@ -55,10 +61,11 @@ export class MessageRepository {
     membershipId: string,
     text: string,
     clientMessageId: string,
+    replyToId?: string,
   ) {
     return tx.message.create({
-      data: { roomId, membershipId, text, clientMessageId },
-      include: { membership: true },
+      data: { roomId, membershipId, text, clientMessageId, replyToId },
+      include: messageInclude,
     });
   }
 
@@ -85,7 +92,7 @@ export class MessageRepository {
       orderBy: [{ createdAt: 'desc' }, { publicId: 'desc' }],
       ...(before ? { cursor: { publicId: before }, skip: 1 } : {}),
       take: limit + 1,
-      include: { membership: true },
+      include: messageInclude,
     });
   }
 }

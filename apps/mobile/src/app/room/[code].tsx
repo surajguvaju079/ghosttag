@@ -26,13 +26,14 @@ import { useSession } from "../../auth/provider";
 import { ApiError, friendlyError, normalizeCode } from "../../api/client";
 import {
   REPORT_REASONS,
+  REACTIONS,
   type Message,
   type ReportReason,
 } from "../../api/contracts";
 import { RoomShare } from "../../components/room-share";
 import { RoomSession } from "../../rooms/room-session";
 import { socketTransport } from "../../messaging/transport";
-import { validText } from "../../messaging/history";
+import { firstMessagePart, validText } from "../../messaging/history";
 import { avatar, vibeLabel } from "../../rooms/vibes";
 import {
   Banner,
@@ -87,6 +88,8 @@ function RoomScreen({ code }: { code: string }) {
   );
   const [now, setNow] = useState(() => Date.now());
   const [draft, setDraft] = useState("");
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const input = useRef<TextInput>(null);
   const [showStarters, setShowStarters] = useState(false);
   const [inputHeight, setInputHeight] = useState(52);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -122,6 +125,7 @@ function RoomScreen({ code }: { code: string }) {
       const unsubscribe = controller.subscribe(() => {
         if (["blocked", "expired"].includes(controller.state.status)) {
           setDraft("");
+          setReplyTo(null);
           setSelected(null);
           setModal(null);
         }
@@ -173,16 +177,20 @@ function RoomScreen({ code }: { code: string }) {
     expired: "This moment has ended",
   }[state.status];
   async function send() {
-    const text = draft;
+    const text = firstMessagePart(draft);
     if (!ready || !validText(text) || sendRateLimited) return;
     // Clear synchronously so a slow ack cannot erase text typed for the next message.
-    setDraft("");
-    const accepted = await controller.send(text);
+    setDraft(draft.slice(text.length));
+    const target = replyTo?.messageId;
+    setReplyTo(null);
+    const accepted = await controller.send(text, undefined, target);
     if (accepted) {
       setNearLatest(true);
       list.current?.scrollToOffset({ offset: 0, animated: true });
-    } else if (!["blocked", "expired"].includes(controller.state.status))
-      setDraft((current) => current || text);
+    } else if (!["blocked", "expired"].includes(controller.state.status)) {
+      setDraft((current) => text + current);
+      if (replyTo) setReplyTo(replyTo);
+    }
   }
   function backToRooms() {
     if (router.canGoBack()) router.back();
@@ -191,9 +199,10 @@ function RoomScreen({ code }: { code: string }) {
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: palette.bg }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <Screen
+        bottomInset={!keyboardVisible}
         style={{
           minHeight: 0,
           width: "100%",
@@ -451,9 +460,77 @@ function RoomScreen({ code }: { code: string }) {
                     borderTopRightRadius: own ? 4 : 18,
                   }}
                 >
+                  {item.replyTo && (
+                    <View
+                      style={{
+                        borderLeftWidth: 2,
+                        borderColor: palette.purple,
+                        paddingLeft: 8,
+                        marginBottom: 8,
+                      }}
+                    >
+                      <Text style={styles.caption}>
+                        Reply to {item.replyTo.author.ghostName}
+                      </Text>
+                      <Text numberOfLines={2} style={styles.caption}>
+                        {item.replyTo.text}
+                      </Text>
+                    </View>
+                  )}
                   <Text selectable style={{ lineHeight: 23 }}>
                     {item.text}
                   </Text>
+                </View>
+                <View style={[styles.row, { flexWrap: "wrap", gap: 4 }]}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Reply to ${item.author.ghostName}`}
+                    disabled={!ready}
+                    onPress={() => {
+                      setReplyTo(item);
+                      input.current?.focus();
+                    }}
+                    style={{
+                      minHeight: 36,
+                      justifyContent: "center",
+                      paddingHorizontal: 8,
+                    }}
+                  >
+                    <Text style={styles.caption}>Reply</Text>
+                  </Pressable>
+                  {REACTIONS.map((type) => {
+                    const reaction = item.reactions?.find(
+                      (entry) => entry.type === type,
+                    );
+                    const emoji = {
+                      FIRE: "🔥",
+                      LAUGH: "😂",
+                      SHOCK: "😱",
+                      MIND_BLOWN: "🤯",
+                    }[type];
+                    return (
+                      <Pressable
+                        key={type}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${reaction?.mine ? "Remove" : "Add"} ${type} reaction`}
+                        disabled={!ready}
+                        onPress={() =>
+                          void controller.react(item.messageId, type)
+                        }
+                        style={{
+                          minHeight: 36,
+                          justifyContent: "center",
+                          paddingHorizontal: 5,
+                          opacity: reaction?.mine ? 1 : 0.65,
+                        }}
+                      >
+                        <Text style={styles.caption}>
+                          {emoji}
+                          {reaction?.count ? ` ${reaction.count}` : ""}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
                 </View>
                 <View style={[styles.row, { justifyContent: "space-between" }]}>
                   <Text style={{ color: palette.muted, fontSize: 10 }}>
@@ -540,46 +617,76 @@ function RoomScreen({ code }: { code: string }) {
         )}
         <View
           style={{
-            padding: 16,
-            gap: 8,
+            paddingHorizontal: 16,
+            paddingTop: keyboardVisible ? 8 : 16,
+            paddingBottom: keyboardVisible ? 4 : 16,
+            gap: keyboardVisible ? 0 : 8,
             borderTopWidth: 1,
             borderColor: palette.line,
           }}
         >
-          {state.details?.room.kind === "MATCHED" && ready && (
-            <View style={{ gap: 6 }}>
-              <Button
-                label={
-                  showStarters
-                    ? "Hide conversation starters"
-                    : "Need a conversation starter?"
-                }
-                secondary
-                onPress={() => setShowStarters((value) => !value)}
-              />
-              {showStarters && (
-                <ScrollView
-                  horizontal
-                  keyboardShouldPersistTaps="handled"
-                  contentContainerStyle={{ gap: 8 }}
-                >
-                  {conversationStarters.map((starter) => (
-                    <Button
-                      key={starter}
-                      label={`Try: ${starter}`}
-                      secondary
-                      onPress={() => {
-                        setDraft(starter);
-                        setShowStarters(false);
-                      }}
-                    />
-                  ))}
-                </ScrollView>
-              )}
+          {replyTo && (
+            <View
+              style={[
+                styles.row,
+                { justifyContent: "space-between", alignItems: "center" },
+              ]}
+            >
+              <Text numberOfLines={1} style={[styles.caption, { flex: 1 }]}>
+                Reply to {replyTo.author.ghostName}: {replyTo.text}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Cancel reply"
+                onPress={() => setReplyTo(null)}
+                style={{
+                  minWidth: 44,
+                  minHeight: 36,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text>×</Text>
+              </Pressable>
             </View>
           )}
+          {!keyboardVisible &&
+            state.details?.room.kind === "MATCHED" &&
+            ready && (
+              <View style={{ gap: 6 }}>
+                <Button
+                  label={
+                    showStarters
+                      ? "Hide conversation starters"
+                      : "Need a conversation starter?"
+                  }
+                  secondary
+                  onPress={() => setShowStarters((value) => !value)}
+                />
+                {showStarters && (
+                  <ScrollView
+                    horizontal
+                    keyboardShouldPersistTaps="handled"
+                    contentContainerStyle={{ gap: 8 }}
+                  >
+                    {conversationStarters.map((starter) => (
+                      <Button
+                        key={starter}
+                        label={`Try: ${starter}`}
+                        secondary
+                        onPress={() => {
+                          setDraft(starter);
+                          setShowStarters(false);
+                        }}
+                      />
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
+            )}
           <View style={[styles.row, { alignItems: "flex-end" }]}>
             <TextInput
+              ref={input}
               accessibilityLabel="Message"
               value={draft}
               onChangeText={setDraft}
@@ -599,7 +706,6 @@ function RoomScreen({ code }: { code: string }) {
               placeholderTextColor={palette.muted}
               editable={ready}
               multiline
-              maxLength={2000}
               style={[
                 styles.input,
                 {
@@ -612,17 +718,26 @@ function RoomScreen({ code }: { code: string }) {
               ]}
             />
             <Button
-              label="Send ↑"
-              disabled={!ready || !validText(draft) || sendRateLimited}
+              label={draft.length > 2000 ? "Send first part ↑" : "Send ↑"}
+              disabled={
+                !ready || !validText(firstMessagePart(draft)) || sendRateLimited
+              }
               onPress={() => void send()}
             />
           </View>
-          <Text style={[styles.caption, { textAlign: "right" }]}>
-            {sendRateLimited
-              ? `Pause for ${Math.ceil((Math.max(state.retryAt, state.sendRetryAt) - now) / 1000)}s · `
-              : ""}
-            {draft.length}/2000 · Text stays in this temporary room
-          </Text>
+          {draft.length > 2000 && (
+            <Text style={styles.caption}>
+              Long paste: send the first part, then send what remains.
+            </Text>
+          )}
+          {!keyboardVisible && (
+            <Text style={[styles.caption, { textAlign: "right" }]}>
+              {sendRateLimited
+                ? `Pause for ${Math.ceil((Math.max(state.retryAt, state.sendRetryAt) - now) / 1000)}s · `
+                : ""}
+              {draft.length} characters · 2,000 per message
+            </Text>
+          )}
         </View>
         <Modal
           visible={modal !== null}

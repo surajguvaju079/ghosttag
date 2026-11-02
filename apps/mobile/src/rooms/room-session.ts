@@ -7,6 +7,8 @@ import type {
   Message,
   Participant,
   ReportReason,
+  ReactionType,
+  ReactionUpdate,
   RoomDetails,
   SendResult,
   Subscription,
@@ -16,6 +18,7 @@ import type { Transport } from "../messaging/transport";
 export type PendingMessage = {
   key: string;
   text: string;
+  replyToMessageId?: string;
   sending: boolean;
   error?: unknown;
 };
@@ -283,6 +286,10 @@ export class RoomSession {
         else if (this.state.status === "recovering")
           this.buffered.push(message);
       });
+      socket.on("message:reaction", (update: ReactionUpdate) => {
+        if (this.current(epoch) && update.code === this.code)
+          this.applyReaction(update);
+      });
       socket.on(
         "room:invalidated",
         (event: { code: string; error: Failure }) => {
@@ -423,7 +430,36 @@ export class RoomSession {
       if (this.current(epoch)) this.patch({ loadingOlder: false });
     }
   }
-  async send(text: string, retryKey?: string) {
+  private applyReaction(update: ReactionUpdate) {
+    this.patch({
+      messages: this.state.messages.map((message) => {
+        if (message.messageId !== update.messageId) return message;
+        const reactions = (message.reactions ?? []).filter(
+          (reaction) => reaction.type !== update.type,
+        );
+        if (update.count > 0)
+          reactions.push({
+            type: update.type,
+            count: update.count,
+            mine: update.mine,
+          });
+        return { ...message, reactions };
+      }),
+    });
+  }
+  async react(messageId: string, type: ReactionType) {
+    if (this.expired() || this.state.status !== "ready" || !this.socket) return;
+    try {
+      const update = await this.socket.request<ReactionUpdate>(
+        "message:react",
+        { code: this.code, messageId, type },
+      );
+      this.applyReaction(update);
+    } catch (error) {
+      this.fail(error, "send");
+    }
+  }
+  async send(text: string, retryKey?: string, replyToMessageId?: string) {
     if (this.expired()) return false;
     if (
       this.state.status !== "ready" ||
@@ -436,6 +472,9 @@ export class RoomSession {
       : undefined;
     if (retryKey && (!retry || retry.sending)) return false;
     const exactText = retry ? retry.text : text;
+    const exactReplyToMessageId = retry
+      ? retry.replyToMessageId
+      : replyToMessageId;
     if (!validText(exactText)) {
       this.fail(
         new ApiError({
@@ -463,7 +502,12 @@ export class RoomSession {
     this.patch({
       pending: [
         ...this.state.pending.filter((item) => item.key !== key),
-        { key, text: exactText, sending: true },
+        {
+          key,
+          text: exactText,
+          replyToMessageId: exactReplyToMessageId,
+          sending: true,
+        },
       ],
       error: undefined,
     });
@@ -473,6 +517,9 @@ export class RoomSession {
         code: this.code,
         clientMessageId: key,
         text: exactText,
+        ...(exactReplyToMessageId
+          ? { replyToMessageId: exactReplyToMessageId }
+          : {}),
       });
       if (this.current(epoch))
         this.patch({

@@ -55,6 +55,34 @@ export class RoomController {
     return this.roomService.getMembers(identity.id, code);
   }
 
+  @Post(':code/participants/:participantId/reports')
+  @HttpCode(202)
+  @RateLimit('MESSAGE_REPORT')
+  reportParticipant(
+    @CurrentIdentity() identity: AuthenticatedIdentity,
+    @Param('code') code: string,
+    @Param('participantId') participantId: string,
+    @Body() body: unknown,
+  ) {
+    return this.roomService.reportParticipant(
+      identity.id,
+      code,
+      participantId,
+      body,
+    );
+  }
+
+  @Post(':code/participants/:participantId/block')
+  @HttpCode(200)
+  @RateLimit('MATCH_ACTION')
+  blockParticipant(
+    @CurrentIdentity() identity: AuthenticatedIdentity,
+    @Param('code') code: string,
+    @Param('participantId') participantId: string,
+  ) {
+    return this.roomService.blockParticipant(identity.id, code, participantId);
+  }
+
   @Get(':code/membership')
   @Header('Cache-Control', 'no-store')
   getMembership(

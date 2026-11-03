@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   GoneException,
@@ -7,6 +8,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import { REPORT_REASONS } from 'src/safety/report-reasons';
 import { CreateRoomDto } from './dto/create-room.dto';
 import { PrismaService } from 'src/database/prisma/prisma.service';
 import { randomInt, randomUUID } from 'crypto';
@@ -28,6 +30,17 @@ export class RoomService {
     return () => {
       this.leaveListeners.delete(listener);
     };
+  }
+
+  notifyLeaves(events: { userId: string; code: string }[]) {
+    for (const event of events)
+      for (const listener of this.leaveListeners) {
+        try {
+          listener(event);
+        } catch {
+          // Authorization checks remain authoritative after a transport failure.
+        }
+      }
   }
 
   constructor(private readonly prisma: PrismaService) {}
@@ -93,7 +106,10 @@ export class RoomService {
 
   async joinRoom(userId: string, code: string, inviteId?: string) {
     return this.prisma.$transaction(
-      (tx) => this.joinInTransaction(tx, userId, code, inviteId),
+      async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(7210912345::bigint)`;
+        return this.joinInTransaction(tx, userId, code, inviteId);
+      },
       { isolationLevel: 'ReadCommitted' },
     );
   }
@@ -110,6 +126,7 @@ export class RoomService {
 
     if (room.kind === 'MATCHED')
       await this.assertMatchedParty(tx, room.id, userId);
+    else await this.assertNoBlockedMember(tx, room.id, userId);
     if (membership?.status === 'ACTIVE') {
       return this.joinResponse(room, membership);
     }
@@ -141,6 +158,25 @@ export class RoomService {
         });
 
     return this.joinResponse(room, activeMembership);
+  }
+
+  private async assertNoBlockedMember(
+    tx: Prisma.TransactionClient,
+    roomId: string,
+    userId: string,
+  ) {
+    const rows = await tx.$queryRaw<{ blocked: number }[]>`
+      SELECT 1 AS blocked FROM "match_blocks" b
+      JOIN "room_memberships" m ON m."userId" =
+        CASE WHEN b."blockerId" = ${userId}::uuid THEN b."blockedId" ELSE b."blockerId" END
+      WHERE (b."blockerId" = ${userId}::uuid OR b."blockedId" = ${userId}::uuid)
+        AND m."roomId" = ${roomId}::uuid AND m."status" = 'ACTIVE'
+      LIMIT 1`;
+    if (rows.length)
+      throw new ForbiddenException({
+        code: 'ROOM_ACCESS_BLOCKED',
+        message: 'This room is unavailable.',
+      });
   }
 
   async createMatchedRoom(
@@ -237,14 +273,156 @@ export class RoomService {
       },
       { isolationLevel: 'ReadCommitted' },
     );
-    for (const listener of this.leaveListeners) {
-      try {
-        listener(event);
-      } catch {
-        // A transport failure cannot undo a committed leave. Per-delivery database
-        // authorization remains authoritative even if local invalidation failed.
+    this.notifyLeaves([event]);
+  }
+
+  async reportParticipant(
+    userId: string,
+    code: string,
+    participantId: string,
+    body: unknown,
+  ) {
+    if (!/^p_[0-9a-f]{32}$/.test(participantId))
+      throw new BadRequestException({
+        code: 'INVALID_PARTICIPANT',
+        message: 'Invalid participant.',
+      });
+    const reason =
+      body &&
+      typeof body === 'object' &&
+      !Array.isArray(body) &&
+      Object.keys(body).length === 1 &&
+      'reason' in body
+        ? body.reason
+        : undefined;
+    if (typeof reason !== 'string' || !REPORT_REASONS.has(reason))
+      throw new BadRequestException({
+        code: 'INVALID_REPORT_REASON',
+        message: 'Invalid report reason.',
+      });
+    return this.readAsActiveMember(userId, code, async (tx, room, reporter) => {
+      const target = await tx.roomMembership.findFirst({
+        where: { roomId: room.id, publicId: participantId, status: 'ACTIVE' },
+      });
+      if (!target || target.userId === userId)
+        throw new NotFoundException({
+          code: 'PARTICIPANT_NOT_FOUND',
+          message: 'Participant not found.',
+        });
+      await tx.participantReport.createMany({
+        data: [
+          {
+            roomId: room.id,
+            reporterMembershipId: reporter.id,
+            targetMembershipId: target.id,
+            reason,
+          },
+        ],
+        skipDuplicates: true,
+      });
+      return { accepted: true };
+    });
+  }
+
+  async blockParticipant(userId: string, code: string, participantId: string) {
+    if (!/^p_[0-9a-f]{32}$/.test(participantId))
+      throw new BadRequestException({
+        code: 'INVALID_PARTICIPANT',
+        message: 'Invalid participant.',
+      });
+    const separated = await this.prisma.$transaction(
+      async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(7210912345::bigint)`;
+        const { room } = await this.authorizeActiveMember(
+          tx,
+          userId,
+          code,
+          'exclusive',
+        );
+        if (room.kind !== 'GROUP')
+          throw new BadRequestException({
+            code: 'INVALID_PARTICIPANT',
+            message: 'Use match controls for this conversation.',
+          });
+        const target = await tx.roomMembership.findFirst({
+          where: { roomId: room.id, publicId: participantId, status: 'ACTIVE' },
+        });
+        if (!target || target.userId === userId)
+          throw new NotFoundException({
+            code: 'PARTICIPANT_NOT_FOUND',
+            message: 'Participant not found.',
+          });
+        await tx.matchBlock.upsert({
+          where: {
+            blockerId_blockedId: {
+              blockerId: userId,
+              blockedId: target.userId,
+            },
+          },
+          create: { blockerId: userId, blockedId: target.userId },
+          update: {},
+        });
+        return this.separateForBlock(tx, userId, target.userId);
+      },
+      { isolationLevel: 'ReadCommitted' },
+    );
+    this.notifyLeaves(separated.events);
+    return {
+      blocked: true,
+      leftRooms: separated.leftRooms,
+    };
+  }
+
+  // The caller holds the matching/join advisory lock. This reuses the private
+  // identity block for both matching and group-room admission.
+  async separateForBlock(
+    tx: Prisma.TransactionClient,
+    blockerId: string,
+    blockedId: string,
+  ) {
+    const shared = await tx.$queryRaw<{ roomId: string; code: string }[]>`
+      SELECT r."id" AS "roomId", r."code" FROM "rooms" r
+      JOIN "room_memberships" mine ON mine."roomId" = r."id"
+      JOIN "room_memberships" theirs ON theirs."roomId" = r."id"
+      WHERE r."kind" = 'GROUP' AND r."status" = 'ACTIVE' AND r."expiresAt" > now()
+        AND mine."userId" = ${blockerId}::uuid AND mine."status" = 'ACTIVE'
+        AND theirs."userId" = ${blockedId}::uuid AND theirs."status" = 'ACTIVE'
+      ORDER BY r."id"`;
+    const events: { userId: string; code: string }[] = [];
+    const leftRooms: string[] = [];
+    for (const item of shared) {
+      await tx.$queryRaw`SELECT "id" FROM "rooms" WHERE "id" = ${item.roomId}::uuid FOR UPDATE`;
+      const stillTogether = await tx.roomMembership.count({
+        where: { roomId: item.roomId, userId: blockedId, status: 'ACTIVE' },
+      });
+      if (!stillTogether) continue;
+      const updated = await tx.roomMembership.updateMany({
+        where: { roomId: item.roomId, userId: blockerId, status: 'ACTIVE' },
+        data: { status: 'LEFT', leftAt: new Date() },
+      });
+      if (updated.count) {
+        events.push({ userId: blockerId, code: item.code });
+        leftRooms.push(item.code);
       }
     }
+    const session = await tx.matchSession.findFirst({
+      where: {
+        OR: [
+          { userAId: blockerId, userBId: blockedId },
+          { userAId: blockedId, userBId: blockerId },
+        ],
+        room: { status: 'ACTIVE', expiresAt: { gt: new Date() } },
+      },
+      include: { room: { select: { code: true } } },
+    });
+    if (session) {
+      await this.closeMatchedRoom(tx, session.roomId);
+      events.push(
+        { userId: blockerId, code: session.room.code },
+        { userId: blockedId, code: session.room.code },
+      );
+    }
+    return { events, leftRooms };
   }
 
   async listRooms(userId: string) {
@@ -322,6 +500,7 @@ export class RoomService {
         where: { roomId: room.id, status: 'ACTIVE' },
         orderBy: [{ joinedAt: 'asc' }, { id: 'asc' }],
         select: {
+          publicId: true,
           ghostName: true,
           ghostAvatar: true,
           role: true,
@@ -329,7 +508,10 @@ export class RoomService {
         },
       });
       return {
-        members,
+        members: members.map(({ publicId, ...member }) => ({
+          participantId: publicId,
+          ...member,
+        })),
         total: members.length,
         maxCapacity: this.capacity(room),
       };

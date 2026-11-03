@@ -586,4 +586,19 @@ export class RoomSession {
       return false;
     }
   }
+  async reportParticipant(participantId: string, reason: ReportReason) {
+    if (this.expired()) return false;
+    if (this.state.status !== "ready" || Date.now() < Math.max(this.state.retryAt, this.state.reportRetryAt))
+      return false;
+    const epoch = this.epoch;
+    this.patch({ notice: undefined, error: undefined });
+    try {
+      await this.api.reportParticipant(this.token, this.code, participantId, reason);
+      if (this.current(epoch)) this.patch({ notice: "Report received. Thank you for looking out for the room." });
+      return this.current(epoch);
+    } catch (error) {
+      if (this.current(epoch)) this.fail(error, "report");
+      return false;
+    }
+  }
 }

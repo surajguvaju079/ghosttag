@@ -121,6 +121,7 @@ model Room {
   matchSession MatchSession?
   creator     AnonymousUser    @relation("RoomCreator", fields: [creatorId], references: [id])
   memberships RoomMembership[]
+  participantReports ParticipantReport[]
   messages    Message[]
   polls       Poll[]
 
@@ -146,6 +147,8 @@ model RoomMembership {
   user      AnonymousUser   @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages  Message[]
   reports   MessageReport[]
+  participantReportsMade ParticipantReport[] @relation("ParticipantReporter")
+  participantReportsReceived ParticipantReport[] @relation("ParticipantTarget")
   reactions Reaction[]
   pollVotes PollVote[]
 
@@ -192,6 +195,23 @@ model MessageReport {
   @@unique([messageId, reporterMembershipId])
   @@index([reporterMembershipId])
   @@map("message_reports")
+}
+
+model ParticipantReport {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roomId String @db.Uuid
+  reporterMembershipId String @db.Uuid
+  targetMembershipId String @db.Uuid
+  reason String @db.VarChar(32)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  reporter RoomMembership @relation("ParticipantReporter", fields: [reporterMembershipId], references: [id], onDelete: Cascade)
+  target RoomMembership @relation("ParticipantTarget", fields: [targetMembershipId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, reporterMembershipId, targetMembershipId])
+  @@index([createdAt])
+  @@map("participant_reports")
 }
 
 model Reaction {

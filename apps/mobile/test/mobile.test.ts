@@ -217,6 +217,13 @@ test("API uses bearer auth, normalizes codes, discards create UUID and sends exa
   assert.deepEqual(JSON.parse(requests[3].init?.body as string), {
     reason: "CHILD_SAFETY",
   });
+  const participantId = `p_${"a".repeat(32)}`;
+  await api.reportParticipant("credential", "gh-1234", participantId, "THREAT");
+  await api.blockParticipant("credential", "gh-1234", participantId);
+  assert.equal(requests[4].url, `http://api/api/v1/rooms/GH-1234/participants/${participantId}/reports`);
+  assert.deepEqual(JSON.parse(requests[4].init?.body as string), { reason: "THREAT" });
+  assert.equal(requests[5].url, `http://api/api/v1/rooms/GH-1234/participants/${participantId}/block`);
+  assert.equal(requests[5].init?.method, "POST");
   assert.ok(!requests.some((request) => request.url.includes("credential")));
 });
 test("HTTP authentication and rate-limit failures retain structured metadata", async () => {
@@ -356,7 +363,7 @@ function harness(
       return currentDetails;
     },
     members: async () => ({
-      members: [{ ...ghost, joinedAt: new Date().toISOString() }],
+      members: [{ ...ghost, participantId: "p_abc", joinedAt: new Date().toISOString() }],
       total: 1,
       maxCapacity: 50,
     }),
@@ -379,6 +386,11 @@ function harness(
       return code;
     },
     report: async (...args: unknown[]) => {
+      if (reportError) throw reportError;
+      reports.push(args);
+      return { accepted: true };
+    },
+    reportParticipant: async (...args: unknown[]) => {
       if (reportError) throw reportError;
       reports.push(args);
       return { accepted: true };
@@ -563,6 +575,18 @@ test("reports use only the current room public message ID and supported reason",
       message(1).messageId,
       "HATE",
     ]);
+    assert.ok(h.controller.state.notice);
+  } finally {
+    h.controller.dispose();
+  }
+});
+test("participant reports use the room-scoped public participant ID without a message", async () => {
+  const h = harness();
+  try {
+    await h.controller.start();
+    await tick();
+    assert.equal(await h.controller.reportParticipant("p_abc", "HARASSMENT"), true);
+    assert.deepEqual(h.reports[0], ["secret", "GH-1234", "p_abc", "HARASSMENT"]);
     assert.ok(h.controller.state.notice);
   } finally {
     h.controller.dispose();

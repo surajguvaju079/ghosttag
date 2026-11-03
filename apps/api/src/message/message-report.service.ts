@@ -2,16 +2,7 @@ import { MessageRepository } from './message.repository';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { MessageService } from './message.service';
 import { payload } from './message.validation';
-
-const reasons = new Set([
-  'SPAM',
-  'HARASSMENT',
-  'HATE',
-  'SEXUAL_CONTENT',
-  'THREAT',
-  'CHILD_SAFETY',
-  'OTHER',
-]);
+import { REPORT_REASONS } from 'src/safety/report-reasons';
 
 @Injectable()
 export class MessageReportService {
@@ -27,7 +18,7 @@ export class MessageReportService {
         message: 'Invalid public message identifier',
       });
     const { reason } = payload(body, ['reason']);
-    if (typeof reason !== 'string' || !reasons.has(reason))
+    if (typeof reason !== 'string' || !REPORT_REASONS.has(reason))
       throw new BadRequestException({
         code: 'INVALID_REPORT_REASON',
         message: 'Invalid report reason',

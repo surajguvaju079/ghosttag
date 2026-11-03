@@ -11,7 +11,8 @@ never an internal message UUID. The message must belong to this specific room.
 { "reason": "SPAM" }
 ```
 
-Allowed reasons: `SPAM`, `HARASSMENT`, `HATE`, `SEXUAL_CONTENT`, `THREAT`, `OTHER`.
+Allowed reasons: `SPAM`, `HARASSMENT`, `HATE`, `SEXUAL_CONTENT`, `THREAT`,
+`CHILD_SAFETY`, `OTHER`.
 No free-form description, reporter ID, copied content or other fields are accepted.
 An ACTIVE owner or member may report; no automatic deletion, ban or lock follows.
 
@@ -45,3 +46,18 @@ database operators can inspect the reports before cleanup; deployment must restr
 and audit that access. Reports cascade away with messages or reporter memberships
 and therefore do not outlive room cleanup. See `docs/operations/messaging-safety.md`
 for deletion timing, configuration, and operational limitations.
+
+## Participant reports
+
+`POST /api/v1/rooms/:code/participants/:participantId/reports` accepts the same
+`{ "reason": "SPAM" }` body and returns the same private `202 { "accepted": true }`
+response. Both caller and target must be distinct ACTIVE members of that room;
+the target needs no message. `participantId` is the public room-scoped `p_`
+identifier from the roster or a message author. Malformed IDs return
+`400 INVALID_PARTICIPANT`; unknown, stale and self targets return
+`404 PARTICIPANT_NOT_FOUND`. The existing report quota applies.
+
+One report per room/reporter/target is stored; repeats preserve the first reason
+and time. The report contains only membership references, reason and timestamp,
+and cascades with room cleanup. Reporting does not block or automatically punish
+the target. No reporter or internal identity is returned to other participants.

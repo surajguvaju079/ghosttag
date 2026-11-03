@@ -27,6 +27,7 @@ const membership = {
 
 describe('RoomService', () => {
   const tx = {
+    $executeRaw: jest.fn(),
     $queryRaw: jest.fn<Promise<unknown[]>, [TemplateStringsArray, string]>(),
     room: { create: jest.fn() },
     roomMembership: {
@@ -45,7 +46,9 @@ describe('RoomService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    tx.$queryRaw.mockResolvedValue([room]);
+    tx.$queryRaw.mockImplementation((strings) =>
+      Promise.resolve(strings.join('').includes('match_blocks') ? [] : [room]),
+    );
     tx.room.create.mockResolvedValue(room);
     tx.roomMembership.findUnique.mockResolvedValue(null);
     tx.roomMembership.count.mockResolvedValue(1);
@@ -276,7 +279,13 @@ describe('RoomService', () => {
   });
 
   it('allows a room whose lock has elapsed', async () => {
-    tx.$queryRaw.mockResolvedValue([{ ...room, lockedUntil: new Date(0) }]);
+    tx.$queryRaw.mockImplementation((strings) =>
+      Promise.resolve(
+        strings.join('').includes('match_blocks')
+          ? []
+          : [{ ...room, lockedUntil: new Date(0) }],
+      ),
+    );
     await expect(
       service.joinRoom(membership.userId, room.code),
     ).resolves.toBeDefined();
@@ -387,6 +396,7 @@ describe('RoomService', () => {
 
     it('queries only ACTIVE participants in this room with deterministic ordering and public fields', async () => {
       const publicMember = {
+        publicId: 'p_11111111111111111111111111111111',
         ghostName: membership.ghostName,
         ghostAvatar: membership.ghostAvatar,
         role: membership.role,
@@ -396,7 +406,15 @@ describe('RoomService', () => {
       await expect(
         service.getMembers(membership.userId, room.code),
       ).resolves.toEqual({
-        members: [publicMember],
+        members: [
+          {
+            participantId: publicMember.publicId,
+            ghostName: publicMember.ghostName,
+            ghostAvatar: publicMember.ghostAvatar,
+            role: publicMember.role,
+            joinedAt: publicMember.joinedAt,
+          },
+        ],
         total: 1,
         maxCapacity: 50,
       });
@@ -404,6 +422,7 @@ describe('RoomService', () => {
         where: { roomId: room.id, status: 'ACTIVE' },
         orderBy: [{ joinedAt: 'asc' }, { id: 'asc' }],
         select: {
+          publicId: true,
           ghostName: true,
           ghostAvatar: true,
           role: true,

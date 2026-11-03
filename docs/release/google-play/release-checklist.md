@@ -36,8 +36,8 @@ No build, upload, account access, signing change, or deployment was performed.
 
 | Area               | Implemented evidence                                                                    | Missing / release gate                                                                                         |
 | ------------------ | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| UGC reporting      | Authenticated public-message reports, fixed reasons, deduplication, quotas              | Direct participant reports and staffed response/escalation                                                     |
-| Blocking           | None                                                                                    | Approve scope; persistent server filtering and delivery checks; UI and concurrency tests                       |
+| UGC reporting      | Authenticated message and participant reports, fixed reasons, deduplication, quotas     | Staffed response/escalation and device acceptance checks                                                        |
+| Blocking           | Private identity blocks prevent future matching/group overlap; blocker leaves shared rooms | Identity reset bypass remains; device and rollout verification                                                   |
 | Terms acceptance   | None                                                                                    | Approved published terms/guidelines; versioned acceptance before any UGC, server enforcement and tests         |
 | Identity deletion  | Credential revocation is checked on REST/sockets; Start fresh only replaces local token | Authenticated deletion, associated data semantics, web request path, receipts/retries and tests                |
 | Privacy            | SecureStore, hashed server credentials, room-scoped public IDs, private reports         | Owner/processor inventory, public policy, retention/backup decisions, Data safety signoff                      |

@@ -14,7 +14,7 @@ export type Room = {
   activeMemberCount: number;
   maxCapacity: number;
 };
-export type Member = Ghost & { joinedAt: string };
+export type Member = Ghost & { participantId: string; joinedAt: string };
 export type Membership = Ghost & {
   status: "ACTIVE";
   joinedAt: string;

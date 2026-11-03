@@ -118,8 +118,8 @@ export function ConversationControls({
       {confirm && (
         <>
           <Text style={styles.muted}>
-            End this chat and prevent future matches with this person? This
-            won’t submit a message report or filter group rooms.
+            End this chat and leave any group rooms you share with this person?
+            You won’t be placed together again while this block is active.
           </Text>
           <Button
             label="Confirm block and end"

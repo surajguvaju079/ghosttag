@@ -164,13 +164,13 @@ export class MatchingService {
     }
     return this.snapshot(tx, userId);
   }
-  action(hash: string, id: string, action: 'extend' | 'end' | 'block') {
+  async action(hash: string, id: string, action: 'extend' | 'end' | 'block') {
     if (!/^c_[a-f0-9]{32}$/.test(id))
       throw new BadRequestException({
         code: 'INVALID_MATCH_SESSION',
         message: 'Invalid conversation.',
       });
-    return this.access(hash, async (tx, userId) => {
+    const result = await this.access(hash, async (tx, userId) => {
       const found = await this.repository.session(tx, id, userId);
       if (!found)
         throw new NotFoundException({
@@ -178,6 +178,7 @@ export class MatchingService {
           message: 'Conversation not found.',
         });
       const session = await this.repository.lockSessionRoom(tx, found.roomId);
+      let events: { userId: string; code: string }[] = [];
       if (action === 'extend') {
         this.rooms.assertAccessible(session.room);
         if (!session.extended) {
@@ -196,16 +197,24 @@ export class MatchingService {
             );
         }
       } else {
-        if (action === 'block')
-          await this.repository.block(
-            tx,
-            userId,
-            session.userAId === userId ? session.userBId : session.userAId,
-          );
-        await this.rooms.closeMatchedRoom(tx, session.roomId);
+        if (action === 'block') {
+          const otherId =
+            session.userAId === userId ? session.userBId : session.userAId;
+          await this.repository.block(tx, userId, otherId);
+          events = (await this.rooms.separateForBlock(tx, userId, otherId))
+            .events;
+        } else {
+          await this.rooms.closeMatchedRoom(tx, session.roomId);
+          events = [
+            { userId: session.userAId, code: session.room.code },
+            { userId: session.userBId, code: session.room.code },
+          ];
+        }
       }
-      return this.snapshot(tx, userId);
+      return { state: await this.snapshot(tx, userId), events };
     });
+    this.rooms.notifyLeaves(result.events);
+    return result.state;
   }
   clearBlocks(hash: string) {
     return this.access(hash, async (tx, userId) => {

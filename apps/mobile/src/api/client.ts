@@ -94,6 +94,8 @@ const messages: Record<string, string> = {
   ROOM_FULL: "This room has reached its 50-ghost limit.",
   ROOM_MEMBERSHIP_REQUIRED: "Join this room before entering.",
   ROOM_MEMBERSHIP_INACTIVE: "You left this room. Rejoin to continue.",
+  ROOM_ACCESS_BLOCKED: "This room is unavailable to your anonymous session.",
+  PARTICIPANT_NOT_FOUND: "This person is no longer in the room.",
   INVALID_IDENTITY_CREDENTIAL: "Your anonymous session is no longer valid.",
   IDENTITY_EXPIRED: "Your anonymous session has expired.",
   IDENTITY_REVOKED: "Your anonymous session is no longer available.",
@@ -334,6 +336,18 @@ export class ApiClient {
       token,
       { reason },
       "POST",
+    );
+  }
+  reportParticipant(token: string, code: string, participantId: string, reason: ReportReason) {
+    return this.request<{ accepted: true }>(
+      `/rooms/${normalizeCode(code)}/participants/${encodeURIComponent(participantId)}/reports`,
+      token, { reason }, "POST",
+    );
+  }
+  blockParticipant(token: string, code: string, participantId: string) {
+    return this.request<{ blocked: true; leftRooms: string[] }>(
+      `/rooms/${normalizeCode(code)}/participants/${encodeURIComponent(participantId)}/block`,
+      token, undefined, "POST",
     );
   }
 }

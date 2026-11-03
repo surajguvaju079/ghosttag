@@ -26,6 +26,8 @@ services:
       NODE_ENV: production
       PORT: 3000
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+      SOCIAL_ACCESS_ENABLED: ${SOCIAL_ACCESS_ENABLED:-false}
+      MATCHING_ENABLED: ${MATCHING_ENABLED:-false}
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:

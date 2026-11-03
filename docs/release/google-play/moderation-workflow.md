@@ -1,7 +1,8 @@
 # Minimal moderation workflow — operational proposal, not a staffed service
 
-Current mechanism: active members report a public message ID within its room;
-reports are private, deduplicated and reason-coded. There is no operator API,
+Current mechanism: active members report a public message ID or another active
+participant within their room; reports are private, deduplicated and reason-coded.
+Participant reports do not require a message. There is no operator API,
 moderation login/dashboard, status queue, automatic punishment or durable archive.
 Existing retention may remove reports roughly an hour after room expiry, or later
 under backlog. Review must fit that short window; staffing/cadence is an owner gate.
@@ -35,6 +36,7 @@ under backlog. Review must fit that short window; staffing/cadence is an owner g
    retention and escalation deadlines before rollout. Track counts/time-to-review
    without identities/content in telemetry. A report is not a guaranteed response.
 
-Server-enforced blocking and identity deletion remain separate implementation
-milestones pending the domain/privacy decisions in release-checklist.md. No new
+Group and matching blocks are server-enforced for future overlap, but an identity
+reset can bypass them. Identity deletion remains a separate milestone pending the
+domain/privacy decisions in release-checklist.md. No new
 admin platform or unauthenticated moderation endpoint has been introduced.

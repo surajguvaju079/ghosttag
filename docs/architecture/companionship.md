@@ -34,14 +34,25 @@ the conversation; explicit end or normal room leave expires it for both. Session
 polling/foreground refresh synchronizes extensions; a server-confirmed extension may
 recover from a client-local deadline, without sending while access is unconfirmed.
 
-Private block rows store blocker, blocked identity and creation time only. Block and
-end writes the block and expires the room atomically. Blocks survive room cleanup
-until the blocker explicitly clears their own rows or an identity is deleted. No
-block list of names or permanent public identities is exposed. Blocks concern future
-matching; group-room filtering is a separate unimplemented policy. Identity resets
-can bypass blocks and declared age screening. Reporting remains a separate explicit
-message report action. Normal room cleanup cascades matched-session rows; bounded
-search cleanup removes expired leases. No permanent match history is introduced.
+Private block rows store blocker, blocked identity and creation time only. Blocking
+from a match or a group room uses the same private relation. It ends an active match,
+leaves every active group room shared by the blocker and blocked identity, and denies
+future group joins in either direction while one is an active member. Join and block
+transactions share the matching advisory lock so a concurrent join cannot create a
+new overlap. The block target is selected by a room-scoped public participant ID;
+internal identities never appear in responses. The join error names no blocker.
+Blocks survive room cleanup until the blocker clears all their own blocks or an
+identity is deleted. Clearing does not rejoin rooms. Identity resets can bypass
+blocks and declared age screening. Normal room cleanup cascades matched-session rows;
+bounded search cleanup removes expired leases. No permanent match history is added.
+The participant-report migration also separates active group memberships for blocks
+that existed before this rule was introduced.
+
+An active member can privately report another active participant without selecting a
+message. Reports use the existing fixed reasons and 202 acknowledgement, deduplicate
+per reporter/target/room, and cascade with room membership/content cleanup. Reporting
+does not automatically block or punish; blocking does not automatically report.
+Moderators must review reports within the temporary retention window.
 
 ## Stable group invites
 

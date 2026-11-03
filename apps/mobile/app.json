@@ -2,7 +2,7 @@
   "expo": {
     "name": "GhostTag",
     "slug": "ghosttag",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/brand/app-icon.png",
     "scheme": "ghosttag",
@@ -16,7 +16,7 @@
     },
     "android": {
       "package": "com.ghosttag",
-      "versionCode": 2,
+      "versionCode": 3,
       "allowBackup": false,
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",

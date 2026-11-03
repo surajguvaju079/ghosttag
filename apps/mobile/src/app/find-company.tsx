@@ -106,21 +106,19 @@ export default function FindCompany() {
         {!!data?.blockedCount && (
           <View style={styles.card}>
             <Text>
-              {data.blockedCount} blocked match
-              {data.blockedCount === 1 ? "" : "es"}
+              {data.blockedCount} blocked {data.blockedCount === 1 ? "person" : "people"}
             </Text>
             <Text style={styles.muted}>
-              Blocked people won’t be matched with this anonymous session again.
-              Blocks don’t filter group rooms.
+              Blocks prevent future matches and group-room overlap for this anonymous session.
             </Text>
             {confirmClear ? (
               <>
                 <Text>
-                  Clear your blocks? Those people could be matched with you
-                  again. Blocks they created still apply.
+                  Clear all blocks? These people may be matched or share group
+                  rooms with you again. You won’t automatically rejoin rooms.
                 </Text>
                 <Button
-                  label="Confirm clear blocked matches"
+                  label="Confirm clear all blocks"
                   danger
                   busy={state.busy}
                   onPress={() => {
@@ -136,7 +134,7 @@ export default function FindCompany() {
               </>
             ) : (
               <Button
-                label="Clear blocked matches"
+                label="Clear all blocks"
                 secondary
                 onPress={() => setConfirmClear(true)}
               />

@@ -108,12 +108,15 @@ function RoomScreen({ code }: { code: string }) {
       hide.remove();
     };
   }, []);
-  const [modal, setModal] = useState<"members" | "leave" | "report" | null>(
+  const [modal, setModal] = useState<"members" | "leave" | "report" | "participant" | "block" | "blockDone" | null>(
     null,
   );
   const [selected, setSelected] = useState<Message | null>(null);
+  const [selectedParticipant, setSelectedParticipant] = useState<{ participantId: string; ghostName: string } | null>(null);
   const [reason, setReason] = useState<ReportReason>("SPAM");
   const [working, setWorking] = useState(false);
+  const [actionError, setActionError] = useState<unknown>();
+  const [leftRoomCount, setLeftRoomCount] = useState(0);
   const list = useRef<FlatList<Message>>(null);
   const [nearLatest, setNearLatest] = useState(true);
   useEffect(() => () => controller.dispose(), [controller]);
@@ -128,7 +131,8 @@ function RoomScreen({ code }: { code: string }) {
           setDraft("");
           setReplyTo(null);
           setSelected(null);
-          setModal(null);
+          setSelectedParticipant(null);
+          setModal((current) => current === "block" || current === "blockDone" ? current : null);
         }
       });
       const timer = setInterval(() => {
@@ -539,6 +543,22 @@ function RoomScreen({ code }: { code: string }) {
                       Report
                     </Text>
                   </Pressable>
+                  {!own && state.details?.room.kind === "GROUP" && (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Actions for ${item.author.ghostName}`}
+                      disabled={!ready}
+                      onPress={() => {
+                        setSelectedParticipant(item.author);
+                        setSelected(null);
+                        setActionError(undefined);
+                        setModal("participant");
+                      }}
+                      style={{ minHeight: 44, minWidth: 48, alignItems: "center", justifyContent: "center" }}
+                    >
+                      <Text style={{ color: palette.muted, fontSize: 11 }}>Person</Text>
+                    </Pressable>
+                  )}
                 </View>
               </View>
             );
@@ -724,7 +744,9 @@ function RoomScreen({ code }: { code: string }) {
           transparent
           animationType="fade"
           onRequestClose={() => {
-            if (!working) setModal(null);
+            if (working) return;
+            if (modal === "blockDone") router.dismissTo("/my-rooms");
+            else setModal(null);
           }}
         >
           <View style={styles.modal}>
@@ -736,9 +758,9 @@ function RoomScreen({ code }: { code: string }) {
                     {state.members?.total ?? 0} ghosts · names can repeat
                   </Text>
                   <ScrollView contentContainerStyle={{ gap: 16 }}>
-                    {state.members?.members.map((member, index) => (
+                    {state.members?.members.map((member) => (
                       <View
-                        key={`${member.joinedAt}-${index}`}
+                        key={member.participantId}
                         style={styles.row}
                       >
                         <Text style={{ fontSize: 28 }}>
@@ -749,16 +771,74 @@ function RoomScreen({ code }: { code: string }) {
                             {member.ghostName}
                           </Text>
                           <Text style={styles.caption}>
-                            {member.role.toLowerCase()} · joined{" "}
+                            {member.role.toLowerCase()} · {member.participantId.slice(-6)} · joined{" "}
                             {new Date(member.joinedAt).toLocaleTimeString([], {
                               hour: "2-digit",
                               minute: "2-digit",
                             })}
                           </Text>
                         </View>
+                        {state.details?.room.kind === "GROUP" && member.participantId !== state.participant?.participantId && (
+                          <Pressable
+                            accessibilityRole="button"
+                            accessibilityLabel={`Actions for ${member.ghostName}, ${member.participantId.slice(-6)}`}
+                            onPress={() => {
+                              setSelectedParticipant(member);
+                              setSelected(null);
+                              setActionError(undefined);
+                              setModal("participant");
+                            }}
+                            style={{ minHeight: 44, minWidth: 60, justifyContent: "center", alignItems: "center" }}
+                          >
+                            <Text style={styles.caption}>Actions</Text>
+                          </Pressable>
+                        )}
                       </View>
                     ))}
                   </ScrollView>
+                </>
+              )}
+              {modal === "participant" && selectedParticipant && (
+                <>
+                  <Text style={styles.title}>{selectedParticipant.ghostName}</Text>
+                  <Text style={styles.caption}>Room participant · {selectedParticipant.participantId.slice(-6)}</Text>
+                  <Button label="Report participant" onPress={() => { setReason("SPAM"); setActionError(undefined); setModal("report"); }} />
+                  <Button label="Block this person" danger onPress={() => { setActionError(undefined); setModal("block"); }} />
+                </>
+              )}
+              {modal === "block" && selectedParticipant && (
+                <>
+                  <Text style={styles.title}>Block this person?</Text>
+                  <Text style={styles.muted}>
+                    You’ll leave every group room you share with them, and any private match will end. You won’t be placed together again while blocked. This does not submit a report.
+                  </Text>
+                  {actionError !== undefined && <Banner>{friendlyError(actionError, now)}</Banner>}
+                  <Button
+                    label="Confirm block and leave"
+                    danger
+                    busy={working}
+                    disabled={!ready || now < (actionError instanceof ApiError ? actionError.retryAt : 0)}
+                    onPress={() => {
+                      setWorking(true);
+                      setActionError(undefined);
+                      void api.blockParticipant(token, code, selectedParticipant.participantId)
+                        .then((result) => {
+                          controller.expire();
+                          setLeftRoomCount(result.leftRooms.length);
+                          setModal("blockDone");
+                        })
+                        .catch(setActionError)
+                        .finally(() => setWorking(false));
+                    }}
+                  />
+                </>
+              )}
+              {modal === "blockDone" && (
+                <>
+                  <Text style={styles.title}>Block saved</Text>
+                  <Text style={styles.muted}>
+                    You left {leftRoomCount} shared group {leftRoomCount === 1 ? "room" : "rooms"}. Any private match with this person has ended. You won’t be placed together while the block is active.
+                  </Text>
                 </>
               )}
               {modal === "leave" && (
@@ -792,7 +872,7 @@ function RoomScreen({ code }: { code: string }) {
               )}
               {modal === "report" && (
                 <>
-                  <Text style={styles.title}>Look out for the room.</Text>
+                  <Text style={styles.title}>{selected ? "Report message" : "Report participant"}</Text>
                   <Text style={styles.muted}>
                     Choose a reason, then confirm. Your identity is not shared
                     with other participants.
@@ -833,18 +913,19 @@ function RoomScreen({ code }: { code: string }) {
                       s. You can still send messages.
                     </Text>
                   )}
+                  {state.error && <Banner>{friendlyError(state.error, now)}</Banner>}
                   <Button
                     label="Confirm report"
                     busy={working}
                     disabled={!ready || reportRateLimited}
                     onPress={() => {
-                      if (!selected) return;
+                      if (!selected && !selectedParticipant) return;
                       setWorking(true);
-                      void controller
-                        .report(selected.messageId, reason)
-                        .then(() => {
-                          setModal(null);
-                          setSelected(null);
+                      void (selected
+                        ? controller.report(selected.messageId, reason)
+                        : controller.reportParticipant(selectedParticipant!.participantId, reason))
+                        .then((reported) => {
+                          if (reported) { setModal(null); setSelected(null); setSelectedParticipant(null); }
                         })
                         .finally(() => setWorking(false));
                     }}
@@ -852,12 +933,14 @@ function RoomScreen({ code }: { code: string }) {
                 </>
               )}
               <Button
-                label={modal === "members" ? "Back to conversation" : "Cancel"}
+                label={modal === "members" ? "Back to conversation" : modal === "blockDone" ? "Back to My Rooms" : "Cancel"}
                 secondary
                 disabled={working}
                 onPress={() => {
+                  if (modal === "blockDone") { router.dismissTo("/my-rooms"); return; }
                   setModal(null);
                   setSelected(null);
+                  setSelectedParticipant(null);
                 }}
               />
             </View>

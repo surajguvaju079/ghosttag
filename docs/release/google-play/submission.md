@@ -10,14 +10,21 @@ when the owner is ready; stop on a different account or organization.
 
 Configure EAS **production** environment with the real EXPO_PUBLIC_API_URL ending
 in /api/v1, optional EXPO_PUBLIC_SOCKET_URL as HTTPS origin, and published
-EXPO_PUBLIC_PRIVACY_URL / EXPO_PUBLIC_TERMS_URL / EXPO_PUBLIC_COMMUNITY_URL. The
+EXPO_PUBLIC_PRIVACY_URL / EXPO_PUBLIC_CHILD_SAFETY_URL /
+EXPO_PUBLIC_TERMS_URL / EXPO_PUBLIC_COMMUNITY_URL. The
 production profile supplies EXPO_PUBLIC_APP_ENV=production. Never use placeholders,
 local development values or credentials in public environment variables.
 
 ```sh
 cd apps/mobile
-eas build --platform android --profile production
+eas env:exec production 'eas build --platform android --profile production'
 ```
+
+The installed EAS CLI evaluates `app.config.js` once before fetching the
+profile's remote environment variables. `env:exec` loads the configured
+production variables into the local process first, so the production HTTPS
+checks also pass during that initial evaluation. Keep the variables in the
+EAS production environment for the build worker; do not rely on `.env.local`.
 
 Do not add --auto-submit. Review signing prompts: reuse the approved upload key
 and enable/manage Google Play App Signing only through the owner's approved Play

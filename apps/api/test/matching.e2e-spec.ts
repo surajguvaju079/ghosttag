@@ -346,8 +346,18 @@ describe('Companionship and stable invites: PostgreSQL + HTTP + sockets', () => 
       .expect(410);
   });
   it('block-and-end survives room cleanup; clearing only own blocks does not erase the other direction', async () => {
+    const group = await rooms.createRoom(a.identityId, { vibe: 'CHAOS' });
+    await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${group.code}/join`)
+      .auth(b.token, { type: 'bearer' })
+      .expect(200);
     const matched = (await pair()).session!;
     await action(matched.id, 'block').expect(200);
+    expect(
+      await prisma.roomMembership.count({
+        where: { roomId: group.id, userId: a.identityId, status: 'LEFT' },
+      }),
+    ).toBe(1);
     await action(matched.id, 'block', b).expect(200);
     const clear = () =>
       request(app.getHttpServer())
@@ -378,6 +388,141 @@ describe('Companionship and stable invites: PostgreSQL + HTTP + sockets', () => 
     config.set('MATCHING_ENABLED', 'false');
     await start(outsider).expect(503);
     await action(matched.id, 'block').expect(200);
+  });
+  it('reports a roster participant without a message and separates blocked identities across rooms and matching', async () => {
+    const first = await rooms.createRoom(a.identityId, { vibe: 'CHAOS' });
+    const second = await rooms.createRoom(a.identityId, { vibe: 'DEEP_TALK' });
+    const third = await rooms.createRoom(a.identityId, { vibe: 'RANT_ZONE' });
+    for (const code of [first.code, second.code])
+      await request(app.getHttpServer())
+        .post(`/api/v1/rooms/${code}/join`)
+        .auth(b.token, { type: 'bearer' })
+        .expect(200);
+    const matched = (await pair()).session!;
+    const roster = await request(app.getHttpServer())
+      .get(`/api/v1/rooms/${first.code}/members`)
+      .auth(a.token, { type: 'bearer' })
+      .expect(200);
+    const publicRoster = roster.body as {
+      members: { participantId: string }[];
+    };
+    const target = publicRoster.members[1].participantId;
+    expect(target).toMatch(/^p_[a-f0-9]{32}$/);
+    expect(JSON.stringify(roster.body)).not.toContain(b.identityId);
+    const report = () =>
+      request(app.getHttpServer())
+        .post(`/api/v1/rooms/${first.code}/participants/${target}/reports`)
+        .auth(a.token, { type: 'bearer' })
+        .send({ reason: 'HARASSMENT' });
+    await report().expect(202, { accepted: true });
+    await report().expect(202, { accepted: true });
+    expect(await prisma.participantReport.count()).toBe(1);
+    await request(app.getHttpServer())
+      .post(
+        `/api/v1/rooms/${first.code}/participants/${publicRoster.members[0].participantId}/reports`,
+      )
+      .auth(a.token, { type: 'bearer' })
+      .send({ reason: 'SPAM' })
+      .expect(404);
+    const socket = await connect(a);
+    expect(
+      (
+        (await socket
+          .timeout(4000)
+          .emitWithAck('room:subscribe', { code: first.code })) as {
+          ok: boolean;
+        }
+      ).ok,
+    ).toBe(true);
+    const invalidated = new Promise<{ code: string }>((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error('Room invalidation was not delivered')),
+        4000,
+      );
+      socket.once('room:invalidated', (event: { code: string }) => {
+        clearTimeout(timer);
+        resolve(event);
+      });
+    });
+    const blocked = await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${first.code}/participants/${target}/block`)
+      .auth(a.token, { type: 'bearer' })
+      .expect(200);
+    expect((await invalidated).code).toBe(first.code);
+    expect((blocked.body as { leftRooms: string[] }).leftRooms).toEqual(
+      expect.arrayContaining([first.code, second.code]),
+    );
+    expect((blocked.body as { leftRooms: string[] }).leftRooms).not.toContain(
+      matched.code,
+    );
+    expect(
+      await prisma.roomMembership.count({
+        where: {
+          userId: a.identityId,
+          roomId: { in: [first.id, second.id] },
+          status: 'LEFT',
+        },
+      }),
+    ).toBe(2);
+    expect((await state(b)).status).toBe('IDLE');
+    await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${first.code}/join`)
+      .auth(a.token, { type: 'bearer' })
+      .expect(403);
+    const thirdInvite = await prisma.room.findUniqueOrThrow({
+      where: { id: third.id },
+    });
+    await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${third.code}/invites/${thirdInvite.inviteId!}/join`)
+      .auth(b.token, { type: 'bearer' })
+      .expect(403);
+    await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${first.code}/join`)
+      .auth(outsider.token, { type: 'bearer' })
+      .expect(200);
+    await request(app.getHttpServer())
+      .delete('/api/v1/matching/blocks')
+      .auth(a.token, { type: 'bearer' })
+      .expect(200);
+    await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${first.code}/join`)
+      .auth(a.token, { type: 'bearer' })
+      .expect(200);
+  });
+  it('serializes a group join racing with a block so no shared membership remains', async () => {
+    const first = await rooms.createRoom(a.identityId, { vibe: 'CHAOS' });
+    const second = await rooms.createRoom(a.identityId, { vibe: 'DEEP_TALK' });
+    await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${first.code}/join`)
+      .auth(b.token, { type: 'bearer' })
+      .expect(200);
+    const roster = await request(app.getHttpServer())
+      .get(`/api/v1/rooms/${first.code}/members`)
+      .auth(a.token, { type: 'bearer' })
+      .expect(200);
+    const target = (roster.body as { members: { participantId: string }[] })
+      .members[1].participantId;
+    const [block, join] = await Promise.all([
+      request(app.getHttpServer())
+        .post(`/api/v1/rooms/${first.code}/participants/${target}/block`)
+        .auth(a.token, { type: 'bearer' }),
+      request(app.getHttpServer())
+        .post(`/api/v1/rooms/${second.code}/join`)
+        .auth(b.token, { type: 'bearer' }),
+    ]);
+    expect(block.status).toBe(200);
+    expect([200, 403]).toContain(join.status);
+    const active = await prisma.roomMembership.findMany({
+      where: { roomId: second.id, status: 'ACTIVE' },
+      select: { userId: true },
+    });
+    expect(
+      active.some(
+        (row) =>
+          row.userId === a.identityId &&
+          active.some((other) => other.userId === b.identityId),
+      ),
+    ).toBe(false);
   });
   it('removes expired searches in bounded cleanup', async () => {
     await start().expect(200);

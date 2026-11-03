@@ -29,6 +29,17 @@
   privately; never print a credential-bearing DATABASE_URL.
 - Set NODE_ENV=production; validate port range, DB URL/SSL, connection limits and
   no development credentials. Do not expose the DB health connection secrets.
+- `SOCIAL_ACCESS_ENABLED` defaults to `false`. Set it to the exact string `true`
+  in the deployed API environment only when social testing is authorized. With
+  `compose.production.yml`, set it in the Compose `.env` and recreate the API
+  container so the new value reaches the process. An eligible `/identity/me`
+  response then reports `socialAccessEnabled: true`.
+- `MATCHING_ENABLED` separately controls new "Find someone" searches and also
+  defaults to `false`. For authorized matching tests, set the exact string
+  `true` in the deployed API environment after applying the companionship
+  migration. With `compose.production.yml`, set it in the Compose `.env` and
+  recreate the API container. An eligible `/matching/state` response then
+  reports `matchingEnabled: true`.
 - Exercise room capacity, idempotent sends, credential revocation, locking, expiry,
   cleanup restart recovery and new consent/block/deletion controls before exposure.
 - Define provider-managed backup/PITR and WAL/replica retention, encrypted storage,

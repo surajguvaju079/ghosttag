@@ -125,12 +125,14 @@ user's identity in this room, with the same public fields as join.
 {
   "members": [
     {
+      "participantId": "p_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       "ghostName": "Quiet Raven",
       "ghostAvatar": "raven",
       "role": "OWNER",
       "joinedAt": "2026-10-18T05:15:00.000Z"
     },
     {
+      "participantId": "p_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       "ghostName": "Neon Fox",
       "ghostAvatar": "fox",
       "role": "MEMBER",
@@ -145,8 +147,24 @@ user's identity in this room, with the same public fields as join.
 Only ACTIVE memberships in the requested room are returned, including the caller.
 Order is original `joinedAt` ascending, then internal membership ID ascending for
 stable ties; the ID is never returned. Rejoining preserves the original `joinedAt`
-and therefore the member's place in this order. Ghost names and avatars need not
-be unique, and must not be treated as global identifiers.
+and therefore the member's place in this order. `participantId` is the public,
+room-scoped membership identifier used in messages and participant safety actions;
+the internal membership ID is never returned. Ghost names and avatars need not be
+unique, and must not be treated as global identifiers.
+
+Group joins and invite joins return `403 ROOM_ACCESS_BLOCKED` when the new membership
+would overlap with an active member connected by a private block in either direction.
+The error does not identify either party. Clearing the block permits a later join;
+it does not restore a previous membership automatically.
+
+`POST /api/v1/rooms/:code/participants/:participantId/block` requires the caller and
+target to be distinct ACTIVE group members. It returns `200` with
+`{ "blocked": true, "leftRooms": ["GH-4829"] }`. The block atomically leaves the
+caller's active shared group rooms and ends an active matched conversation with the
+target. `leftRooms` contains only room codes already associated with the caller.
+Further joins/rejoins that would place these identities together are rejected.
+Unknown, stale or self targets return `404 PARTICIPANT_NOT_FOUND`; malformed IDs
+return `400 INVALID_PARTICIPANT`. Existing match-block clearing removes this block.
 
 Pagination is intentionally omitted for the current maximum of 50 ACTIVE members.
 The response always contains the complete list; `total` equals `members.length`.

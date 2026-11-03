@@ -36,14 +36,24 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="safety"
+        name="discover"
         options={{
-          title: "Safety",
+          title: "Discover",
           tabBarIcon: ({ color }) => (
-            <Text style={{ color, fontSize: 24 }}>◇</Text>
+            <Text style={{ color, fontSize: 24 }}>✦</Text>
           ),
         }}
       />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: "Settings",
+          tabBarIcon: ({ color }) => (
+            <Text style={{ color, fontSize: 24 }}>⚙</Text>
+          ),
+        }}
+      />
+      <Tabs.Screen name="safety" options={{ href: null }} />
     </Tabs>
   );
 }

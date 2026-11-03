@@ -20,8 +20,7 @@ export default function FindCompany() {
     queue.snapshot,
     queue.snapshot,
   );
-  const [now, setNow] = useState(Date.now),
-    [confirmClear, setConfirmClear] = useState(false);
+  const [now, setNow] = useState(Date.now);
   useFocusEffect(
     useCallback(() => {
       if (AppState.currentState === "active" || AppState.currentState === null)
@@ -104,42 +103,11 @@ export default function FindCompany() {
           </Text>
         )}
         {!!data?.blockedCount && (
-          <View style={styles.card}>
-            <Text>
-              {data.blockedCount} blocked {data.blockedCount === 1 ? "person" : "people"}
-            </Text>
-            <Text style={styles.muted}>
-              Blocks prevent future matches and group-room overlap for this anonymous session.
-            </Text>
-            {confirmClear ? (
-              <>
-                <Text>
-                  Clear all blocks? These people may be matched or share group
-                  rooms with you again. You won’t automatically rejoin rooms.
-                </Text>
-                <Button
-                  label="Confirm clear all blocks"
-                  danger
-                  busy={state.busy}
-                  onPress={() => {
-                    setConfirmClear(false);
-                    void queue.clearBlocks();
-                  }}
-                />
-                <Button
-                  label="Keep blocks"
-                  secondary
-                  onPress={() => setConfirmClear(false)}
-                />
-              </>
-            ) : (
-              <Button
-                label="Clear all blocks"
-                secondary
-                onPress={() => setConfirmClear(true)}
-              />
-            )}
-          </View>
+          <Text style={styles.muted}>
+            {data.blockedCount} blocked{" "}
+            {data.blockedCount === 1 ? "person" : "people"}. Manage blocks in
+            Settings.
+          </Text>
         )}
         <Button
           label="Back to Home"

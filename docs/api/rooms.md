@@ -6,6 +6,22 @@ Every endpoint also requires current 18+ eligibility and enabled social access.
 See [age eligibility](age-eligibility.md) for the additional 403/503 errors.
 Room codes are public identifiers, trimmed and converted to uppercase before lookup.
 
+## Discovery
+
+`POST /api/v1/rooms` accepts optional `discoverable: boolean` (default false)
+for group rooms. `GET /api/v1/rooms/discover?cursor=<opaque>` requires an eligible
+anonymous credential and returns `{rooms, nextCursor}`. Each card has `code`,
+`inviteId`, `vibe`, `expiresAt`, and `activeMemberCount`. Pages have at most 20
+rooms. Room names and participant identities are omitted. The list excludes
+expired, locked, full, blocked-overlap, matched and already joined rooms.
+
+`PATCH /api/v1/rooms/:code/discovery` accepts exactly
+`{ "discoverable": true | false }` and returns `{discoverable}`. Only an active
+group room owner may change it. Unlisting affects new discovery results; existing
+invite links continue to work. Clients join from cards through the existing
+invite-bound join endpoint, which rechecks access. See
+[discovery architecture](../architecture/discovery.md).
+
 ## My rooms
 
 `GET /api/v1/rooms` returns `200 OK` with `Cache-Control: no-store`:

@@ -110,6 +110,7 @@ model Room {
   code        String     @unique @db.VarChar(7)
   kind        RoomKind   @default(GROUP)
   inviteId    String?    @unique @db.Uuid
+  discoverable Boolean    @default(false)
   vibe        RoomVibe
   name        String?    @db.VarChar(100)
   creatorId   String     @db.Uuid
@@ -128,6 +129,7 @@ model Room {
   @@index([expiresAt, id])
   @@index([status, expiresAt])
   @@index([creatorId])
+  @@index([discoverable, createdAt(sort: Desc), inviteId(sort: Desc)])
   @@map("rooms")
 }
 

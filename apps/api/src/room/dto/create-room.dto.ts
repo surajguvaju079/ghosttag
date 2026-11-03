@@ -1,7 +1,11 @@
-import { IsEnum, IsOptional, IsString, MaxLength } from "class-validator";
-import { RoomVibe } from "generated/prisma/enums";
-
-
+import {
+  IsBoolean,
+  IsEnum,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
+import { RoomVibe } from 'generated/prisma/enums';
 
 export class CreateRoomDto {
   @IsEnum(RoomVibe)
@@ -11,4 +15,8 @@ export class CreateRoomDto {
   @IsString()
   @MaxLength(100)
   name?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  discoverable?: boolean;
 }

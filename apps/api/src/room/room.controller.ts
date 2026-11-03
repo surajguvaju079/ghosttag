@@ -8,7 +8,9 @@ import {
   Header,
   HttpCode,
   Param,
+  Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { AnonymousIdentityGuard } from 'src/common/auth/anonymous-identity.guard';
@@ -35,6 +37,26 @@ export class RoomController {
   @Header('Cache-Control', 'no-store')
   listRooms(@CurrentIdentity() identity: AuthenticatedIdentity) {
     return this.roomService.listRooms(identity.id);
+  }
+
+  @Get('discover')
+  @Header('Cache-Control', 'no-store')
+  @RateLimit('ROOM_JOIN')
+  discoverRooms(
+    @CurrentIdentity() identity: AuthenticatedIdentity,
+    @Query('cursor') cursor?: string,
+  ) {
+    return this.roomService.discoverRooms(identity.id, cursor);
+  }
+
+  @Patch(':code/discovery')
+  @RateLimit('ROOM_JOIN')
+  setDiscovery(
+    @CurrentIdentity() identity: AuthenticatedIdentity,
+    @Param('code') code: string,
+    @Body() body: unknown,
+  ) {
+    return this.roomService.setDiscovery(identity.id, code, body);
   }
 
   @Get(':code')

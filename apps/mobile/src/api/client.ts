@@ -4,6 +4,7 @@ import type {
   IdentityStatus,
   MatchState,
   JoinedRooms,
+  DiscoverRooms,
   Ghost,
   History,
   Membership,
@@ -278,12 +279,17 @@ export class ApiClient {
     );
     return normalized;
   }
-  async createRoom(token: string, vibe: Vibe, name: string) {
+  async createRoom(
+    token: string,
+    vibe: Vibe,
+    name: string,
+    discoverable = false,
+  ) {
     // Select only public fields; legacy create currently also returns an internal UUID.
     const result = await this.request<{ code: string }>(
       "/rooms",
       token,
-      { vibe, ...(name.trim() ? { name: name.trim() } : {}) },
+      { vibe, discoverable, ...(name.trim() ? { name: name.trim() } : {}) },
       "POST",
     );
     return normalizeCode(result.code);
@@ -300,6 +306,20 @@ export class ApiClient {
   }
   rooms(token: string) {
     return this.request<JoinedRooms>("/rooms", token);
+  }
+  discoverRooms(token: string, cursor?: string) {
+    return this.request<DiscoverRooms>(
+      `/rooms/discover${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
+      token,
+    );
+  }
+  setRoomDiscovery(token: string, code: string, discoverable: boolean) {
+    return this.request<{ discoverable: boolean }>(
+      `/rooms/${normalizeCode(code)}/discovery`,
+      token,
+      { discoverable },
+      "PATCH",
+    );
   }
   details(token: string, code: string) {
     return this.request<RoomDetails>(`/rooms/${normalizeCode(code)}`, token);
@@ -338,16 +358,25 @@ export class ApiClient {
       "POST",
     );
   }
-  reportParticipant(token: string, code: string, participantId: string, reason: ReportReason) {
+  reportParticipant(
+    token: string,
+    code: string,
+    participantId: string,
+    reason: ReportReason,
+  ) {
     return this.request<{ accepted: true }>(
       `/rooms/${normalizeCode(code)}/participants/${encodeURIComponent(participantId)}/reports`,
-      token, { reason }, "POST",
+      token,
+      { reason },
+      "POST",
     );
   }
   blockParticipant(token: string, code: string, participantId: string) {
     return this.request<{ blocked: true; leftRooms: string[] }>(
       `/rooms/${normalizeCode(code)}/participants/${encodeURIComponent(participantId)}/block`,
-      token, undefined, "POST",
+      token,
+      undefined,
+      "POST",
     );
   }
 }

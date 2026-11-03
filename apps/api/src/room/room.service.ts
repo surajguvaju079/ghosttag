@@ -57,6 +57,7 @@ export class RoomService {
             data: {
               code,
               inviteId: randomUUID(),
+              discoverable: dto.discoverable ?? false,
               vibe: dto.vibe,
               name: dto.name?.trim() || null,
               creatorId: userId,
@@ -460,6 +461,124 @@ export class RoomService {
     };
   }
 
+  async discoverRooms(userId: string, cursor?: string) {
+    let before: { createdAt: string; inviteId: string } | null = null;
+    if (cursor !== undefined) {
+      try {
+        if (cursor.length > 200 || !/^[A-Za-z0-9_-]+$/.test(cursor))
+          throw new Error('Invalid cursor');
+        const value: unknown = JSON.parse(
+          Buffer.from(cursor, 'base64url').toString('utf8'),
+        );
+        if (
+          !Array.isArray(value) ||
+          value.length !== 2 ||
+          typeof value[0] !== 'string' ||
+          typeof value[1] !== 'string' ||
+          !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z$/.test(value[0]) ||
+          !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value[1])
+        )
+          throw new Error('Invalid cursor');
+        before = { createdAt: value[0], inviteId: value[1] };
+        if (Number.isNaN(Date.parse(value[0])))
+          throw new Error('Invalid cursor');
+      } catch {
+        throw new BadRequestException({
+          code: 'INVALID_CURSOR',
+          message: 'Invalid discovery cursor.',
+        });
+      }
+    }
+    const rows = await this.prisma.$queryRaw<
+      {
+        code: string;
+        inviteId: string;
+        vibe: Room['vibe'];
+        createdAtCursor: string;
+        expiresAt: Date;
+        activeMemberCount: number;
+      }[]
+    >`
+      SELECT r."code", r."inviteId", r."vibe", r."expiresAt",
+             to_char(r."createdAt" AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS "createdAtCursor",
+             count(m."id")::int AS "activeMemberCount"
+      FROM "rooms" r
+      LEFT JOIN "room_memberships" m ON m."roomId" = r."id" AND m."status" = 'ACTIVE'
+      WHERE r."kind" = 'GROUP' AND r."discoverable" = true
+        AND r."status" = 'ACTIVE' AND r."expiresAt" > now()
+        AND (r."lockedUntil" IS NULL OR r."lockedUntil" <= now())
+        AND r."inviteId" IS NOT NULL
+        AND (${before?.createdAt ?? null}::timestamptz IS NULL OR
+          (r."createdAt", r."inviteId") < (${before?.createdAt ?? null}::timestamptz, ${before?.inviteId ?? null}::uuid))
+        AND NOT EXISTS (
+          SELECT 1 FROM "room_memberships" own
+          WHERE own."roomId" = r."id" AND own."userId" = ${userId}::uuid AND own."status" = 'ACTIVE'
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM "room_memberships" peer
+          JOIN "match_blocks" b ON
+            (b."blockerId" = ${userId}::uuid AND b."blockedId" = peer."userId") OR
+            (b."blockedId" = ${userId}::uuid AND b."blockerId" = peer."userId")
+          WHERE peer."roomId" = r."id" AND peer."status" = 'ACTIVE'
+        )
+      GROUP BY r."id"
+      HAVING count(m."id") < ${this.maxCapacity}
+      ORDER BY r."createdAt" DESC, r."inviteId" DESC
+      LIMIT 21`;
+    const page = rows.slice(0, 20);
+    const last = page.at(-1);
+    return {
+      rooms: page.map(
+        ({ code, inviteId, vibe, expiresAt, activeMemberCount }) => ({
+          code,
+          inviteId,
+          vibe,
+          expiresAt,
+          activeMemberCount,
+        }),
+      ),
+      nextCursor:
+        rows.length > 20 && last
+          ? Buffer.from(
+              JSON.stringify([last.createdAtCursor, last.inviteId]),
+            ).toString('base64url')
+          : null,
+    };
+  }
+
+  async setDiscovery(userId: string, code: string, body: unknown) {
+    if (
+      !body ||
+      typeof body !== 'object' ||
+      Array.isArray(body) ||
+      Object.keys(body).length !== 1 ||
+      typeof (body as { discoverable?: unknown }).discoverable !== 'boolean'
+    )
+      throw new BadRequestException({
+        code: 'INVALID_DISCOVERY',
+        message: 'Choose whether to list this room.',
+      });
+    const discoverable = (body as { discoverable: boolean }).discoverable;
+    return this.prisma.$transaction(async (tx) => {
+      const room = await this.lockAccessibleRoom(tx, code);
+      const membership = await tx.roomMembership.findUnique({
+        where: { userId_roomId: { userId, roomId: room.id } },
+      });
+      if (
+        room.kind !== 'GROUP' ||
+        room.creatorId !== userId ||
+        membership?.status !== 'ACTIVE' ||
+        membership.role !== 'OWNER'
+      )
+        throw new ForbiddenException({
+          code: 'ROOM_OWNER_REQUIRED',
+          message: 'Only the active room host can change discovery.',
+        });
+      await tx.room.update({ where: { id: room.id }, data: { discoverable } });
+      return { discoverable };
+    });
+  }
+
   async getRoom(userId: string, code: string) {
     return this.readAsActiveMember(
       userId,
@@ -473,6 +592,7 @@ export class RoomService {
             code: room.code,
             kind: room.kind ?? 'GROUP',
             inviteId: room.inviteId ?? null,
+            discoverable: room.discoverable,
             matchId:
               room.kind === 'MATCHED'
                 ? (

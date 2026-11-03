@@ -57,11 +57,11 @@ export default function Safety({
           </Text>
         </View>
         <View style={styles.card}>
-          <Text style={styles.label}>REPORT A MESSAGE</Text>
+          <Text style={styles.label}>REPORT A MESSAGE OR PERSON</Text>
           <Text>
-            Use Report on a message, choose a reason, then confirm. Your report
-            and reporter identity are not shown to other participants. A report
-            does not automatically remove content.
+            Use Report on a message or participant, choose a reason, then
+            confirm. Your report and reporter identity are not shown to other
+            participants. A report does not automatically remove content.
           </Text>
         </View>
         <View style={styles.card}>
@@ -74,9 +74,9 @@ export default function Safety({
           <Text>
             Start fresh replaces the credential on this device. It does not
             delete the previous identity or its server data. You can block a
-            person after a private match to prevent future matching with that
-            identity, and clear your own blocks from Find company. Blocks do not
-            apply to group rooms. In-app identity deletion is not currently
+            person in a private match or group room. Blocks prevent future
+            matching and shared group rooms. You can clear your blocks in
+            Settings. In-app identity deletion is not currently
             available.
           </Text>
         </View>

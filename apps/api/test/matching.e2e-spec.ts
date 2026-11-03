@@ -171,6 +171,107 @@ describe('Companionship and stable invites: PostgreSQL + HTTP + sockets', () => 
       socket.once('connect_error', reject);
     });
   }
+  it('lists only opted-in rooms and lets the active host hide one without revoking invites', async () => {
+    const hidden = await request(app.getHttpServer())
+      .post('/api/v1/rooms')
+      .auth(a.token, { type: 'bearer' })
+      .send({ vibe: 'CHAOS', name: 'Private' })
+      .expect(201);
+    const listed = await request(app.getHttpServer())
+      .post('/api/v1/rooms')
+      .auth(a.token, { type: 'bearer' })
+      .send({
+        vibe: 'DEEP_TALK',
+        name: 'Never expose this',
+        discoverable: true,
+      })
+      .expect(201);
+    const hiddenCode = (hidden.body as { code: string }).code;
+    const code = (listed.body as { code: string }).code;
+    const details = await request(app.getHttpServer())
+      .get(`/api/v1/rooms/${code}`)
+      .auth(a.token, { type: 'bearer' })
+      .expect(200);
+    const detailsBody = details.body as {
+      room: { inviteId: string; discoverable: boolean };
+    };
+    const inviteId = detailsBody.room.inviteId;
+    expect(detailsBody.room.discoverable).toBe(true);
+    const discovery = await request(app.getHttpServer())
+      .get('/api/v1/rooms/discover')
+      .auth(b.token, { type: 'bearer' })
+      .expect(200);
+    const unassessed = await identities.createIdentity();
+    await request(app.getHttpServer())
+      .get('/api/v1/rooms/discover')
+      .auth(unassessed.token, { type: 'bearer' })
+      .expect(403);
+    const discoveryBody = discovery.body as { rooms: unknown[] };
+    expect(discoveryBody.rooms).toEqual(
+      expect.arrayContaining([
+        {
+          code,
+          inviteId,
+          vibe: 'DEEP_TALK',
+          expiresAt: expect.any(String) as string,
+          activeMemberCount: 1,
+        },
+      ]),
+    );
+    expect(discoveryBody.rooms).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: hiddenCode }) as object,
+      ]),
+    );
+    expect(JSON.stringify(discovery.body)).not.toContain('Never expose this');
+    await request(app.getHttpServer())
+      .patch(`/api/v1/rooms/${code}/discovery`)
+      .auth(b.token, { type: 'bearer' })
+      .send({ discoverable: false })
+      .expect(403);
+    await request(app.getHttpServer())
+      .patch(`/api/v1/rooms/${code}/discovery`)
+      .auth(a.token, { type: 'bearer' })
+      .send({ discoverable: false })
+      .expect(200);
+    const after = await request(app.getHttpServer())
+      .get('/api/v1/rooms/discover')
+      .auth(b.token, { type: 'bearer' })
+      .expect(200);
+    expect((after.body as { rooms: unknown[] }).rooms).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ code }) as object]),
+    );
+    await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${code}/invites/${inviteId}/join`)
+      .auth(b.token, { type: 'bearer' })
+      .expect(200);
+    await request(app.getHttpServer())
+      .patch(`/api/v1/rooms/${code}/discovery`)
+      .auth(a.token, { type: 'bearer' })
+      .send({ discoverable: true })
+      .expect(200);
+    const roster = await request(app.getHttpServer())
+      .get(`/api/v1/rooms/${code}/members`)
+      .auth(b.token, { type: 'bearer' })
+      .expect(200);
+    const owner = (
+      roster.body as { members: { participantId: string; role: string }[] }
+    ).members.find((member) => member.role === 'OWNER');
+    expect(owner).toBeDefined();
+    await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${code}/participants/${owner!.participantId}/block`)
+      .auth(b.token, { type: 'bearer' })
+      .expect(200);
+    const blockedListing = await request(app.getHttpServer())
+      .get('/api/v1/rooms/discover')
+      .auth(b.token, { type: 'bearer' })
+      .expect(200);
+    expect(
+      (blockedListing.body as { rooms: { code: string }[] }).rooms,
+    ).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ code }) as object]),
+    );
+  });
   it('defaults off, authenticates, gates age, and accepts only casual English', async () => {
     config.set('MATCHING_ENABLED', undefined);
     expect((await state()).matchingEnabled).toBe(false);

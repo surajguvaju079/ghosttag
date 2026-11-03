@@ -5,6 +5,7 @@ import { PrismaService } from 'src/database/prisma/prisma.service';
 const room = {
   id: 'private-room',
   code: 'GH-1234',
+  creatorId: 'private-user',
   kind: 'GROUP',
   inviteId: '11111111-1111-4111-8111-111111111111',
   vibe: 'DEEP_TALK',
@@ -29,7 +30,7 @@ describe('RoomService', () => {
   const tx = {
     $executeRaw: jest.fn(),
     $queryRaw: jest.fn<Promise<unknown[]>, [TemplateStringsArray, string]>(),
-    room: { create: jest.fn() },
+    room: { create: jest.fn(), update: jest.fn() },
     roomMembership: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
@@ -40,6 +41,7 @@ describe('RoomService', () => {
   };
   const prisma = {
     roomMembership: tx.roomMembership,
+    $queryRaw: jest.fn(),
     $transaction: jest.fn((work: (client: typeof tx) => unknown) => work(tx)),
   };
   const service = new RoomService(prisma as unknown as PrismaService);
@@ -132,6 +134,56 @@ describe('RoomService', () => {
       }),
     );
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('lists only the public discovery fields and paginates without internal IDs', async () => {
+    const rows = Array.from({ length: 21 }, (_, index) => ({
+      code: `GH-${String(index).padStart(4, '0')}`,
+      inviteId: `11111111-1111-4111-8111-${String(index).padStart(12, '0')}`,
+      vibe: 'DEEP_TALK',
+      createdAtCursor: '2026-11-03T00:00:00.123456Z',
+      expiresAt: room.expiresAt,
+      activeMemberCount: 2,
+    }));
+    prisma.$queryRaw.mockResolvedValue(rows);
+    const first = await service.discoverRooms(membership.userId);
+    expect(first.rooms).toHaveLength(20);
+    expect(first.rooms[0]).toEqual({
+      code: 'GH-0000',
+      inviteId: rows[0].inviteId,
+      vibe: 'DEEP_TALK',
+      expiresAt: room.expiresAt,
+      activeMemberCount: 2,
+    });
+    expect(first.nextCursor).toBeTruthy();
+    prisma.$queryRaw.mockResolvedValue([]);
+    await expect(
+      service.discoverRooms(membership.userId, first.nextCursor!),
+    ).resolves.toEqual({ rooms: [], nextCursor: null });
+    await expect(
+      service.discoverRooms(membership.userId, 'bad'),
+    ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('lets only an active group owner change discovery', async () => {
+    tx.roomMembership.findUnique.mockResolvedValue(membership);
+    await expect(
+      service.setDiscovery(membership.userId, room.code, {
+        discoverable: true,
+      }),
+    ).resolves.toEqual({ discoverable: true });
+    expect(tx.room.update).toHaveBeenCalledWith({
+      where: { id: room.id },
+      data: { discoverable: true },
+    });
+    await expect(
+      service.setDiscovery('another-user', room.code, { discoverable: false }),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      service.setDiscovery(membership.userId, room.code, {
+        discoverable: 'yes',
+      }),
+    ).rejects.toMatchObject({ status: 400 });
   });
 
   it.each([

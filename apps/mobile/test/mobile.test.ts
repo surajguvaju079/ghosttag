@@ -60,6 +60,7 @@ const details: RoomDetails = {
   room: {
     kind: "GROUP",
     inviteId: "11111111-1111-4111-8111-111111111111",
+    discoverable: false,
     matchId: null,
     code: "GH-1234",
     name: "Night thoughts",
@@ -203,6 +204,7 @@ test("API uses bearer auth, normalizes codes, discards create UUID and sends exa
   );
   assert.deepEqual(JSON.parse(requests[0].init?.body as string), {
     vibe: "CHAOS",
+    discoverable: false,
     name: "My room",
   });
   assert.deepEqual(JSON.parse(requests[2].init?.body as string), {
@@ -220,9 +222,17 @@ test("API uses bearer auth, normalizes codes, discards create UUID and sends exa
   const participantId = `p_${"a".repeat(32)}`;
   await api.reportParticipant("credential", "gh-1234", participantId, "THREAT");
   await api.blockParticipant("credential", "gh-1234", participantId);
-  assert.equal(requests[4].url, `http://api/api/v1/rooms/GH-1234/participants/${participantId}/reports`);
-  assert.deepEqual(JSON.parse(requests[4].init?.body as string), { reason: "THREAT" });
-  assert.equal(requests[5].url, `http://api/api/v1/rooms/GH-1234/participants/${participantId}/block`);
+  assert.equal(
+    requests[4].url,
+    `http://api/api/v1/rooms/GH-1234/participants/${participantId}/reports`,
+  );
+  assert.deepEqual(JSON.parse(requests[4].init?.body as string), {
+    reason: "THREAT",
+  });
+  assert.equal(
+    requests[5].url,
+    `http://api/api/v1/rooms/GH-1234/participants/${participantId}/block`,
+  );
   assert.equal(requests[5].init?.method, "POST");
   assert.ok(!requests.some((request) => request.url.includes("credential")));
 });
@@ -363,7 +373,13 @@ function harness(
       return currentDetails;
     },
     members: async () => ({
-      members: [{ ...ghost, participantId: "p_abc", joinedAt: new Date().toISOString() }],
+      members: [
+        {
+          ...ghost,
+          participantId: "p_abc",
+          joinedAt: new Date().toISOString(),
+        },
+      ],
       total: 1,
       maxCapacity: 50,
     }),
@@ -585,8 +601,16 @@ test("participant reports use the room-scoped public participant ID without a me
   try {
     await h.controller.start();
     await tick();
-    assert.equal(await h.controller.reportParticipant("p_abc", "HARASSMENT"), true);
-    assert.deepEqual(h.reports[0], ["secret", "GH-1234", "p_abc", "HARASSMENT"]);
+    assert.equal(
+      await h.controller.reportParticipant("p_abc", "HARASSMENT"),
+      true,
+    );
+    assert.deepEqual(h.reports[0], [
+      "secret",
+      "GH-1234",
+      "p_abc",
+      "HARASSMENT",
+    ]);
     assert.ok(h.controller.state.notice);
   } finally {
     h.controller.dispose();

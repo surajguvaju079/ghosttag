@@ -5,6 +5,7 @@ export type Ghost = { ghostName: string; ghostAvatar: string; role: Role };
 export type Room = {
   kind: "GROUP" | "MATCHED";
   inviteId: string | null;
+  discoverable: boolean;
   matchId: string | null;
   code: string;
   name: string | null;
@@ -89,6 +90,14 @@ export type JoinedRoom = Pick<
   membershipStatus: "ACTIVE" | "LEFT";
 };
 export type JoinedRooms = { rooms: JoinedRoom[] };
+export type DiscoverRoom = Pick<
+  Room,
+  "code" | "inviteId" | "vibe" | "expiresAt" | "activeMemberCount"
+>;
+export type DiscoverRooms = {
+  rooms: DiscoverRoom[];
+  nextCursor: string | null;
+};
 
 export type IdentityStatus = {
   ageEligibility: {

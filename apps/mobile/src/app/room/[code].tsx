@@ -117,6 +117,8 @@ function RoomScreen({ code }: { code: string }) {
   const [working, setWorking] = useState(false);
   const [actionError, setActionError] = useState<unknown>();
   const [leftRoomCount, setLeftRoomCount] = useState(0);
+  const [discoveryOverride, setDiscoveryOverride] = useState<boolean | null>(null);
+  const [discoveryBusy, setDiscoveryBusy] = useState(false);
   const list = useRef<FlatList<Message>>(null);
   const [nearLatest, setNearLatest] = useState(true);
   useEffect(() => () => controller.dispose(), [controller]);
@@ -753,6 +755,25 @@ function RoomScreen({ code }: { code: string }) {
             <View style={styles.modalCard}>
               {modal === "members" && (
                 <>
+                  {state.details?.room.kind === "GROUP" && state.membership?.role === "OWNER" && <View style={styles.card}>
+                    <Text style={styles.label}>DISCOVER VISIBILITY</Text>
+                    <Text style={styles.muted}>
+                      {(discoveryOverride ?? state.details.room.discoverable)
+                        ? "This room appears in Discover for eligible people."
+                        : "This room is hidden from Discover. Invites still work."}
+                    </Text>
+                    {actionError !== undefined && <Banner>{friendlyError(actionError, now)}</Banner>}
+                    <Button label={(discoveryOverride ?? state.details.room.discoverable) ? "Hide from Discover" : "List in Discover"}
+                      secondary busy={discoveryBusy} onPress={() => {
+                        const next = !(discoveryOverride ?? state.details!.room.discoverable);
+                        setDiscoveryBusy(true);
+                        setActionError(undefined);
+                        void api.setRoomDiscovery(token, code, next)
+                          .then(() => setDiscoveryOverride(next))
+                          .catch(setActionError)
+                          .finally(() => setDiscoveryBusy(false));
+                      }} />
+                  </View>}
                   <Text style={styles.title}>In the room</Text>
                   <Text style={styles.muted}>
                     {state.members?.total ?? 0} ghosts · names can repeat

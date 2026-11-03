@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GhostTag altered voice lab</title>
+  <style>
+    body { font: 16px system-ui; background: #0f0b1f; color: white; max-width: 34rem; margin: 2rem auto; padding: 1rem; }
+    button { padding: .8rem 1rem; margin: .3rem; border: 0; border-radius: .6rem; background: #aa83ff; color: #100922; font-weight: 700; }
+    button:disabled { opacity: .45; }
+    audio { width: 100%; margin: 1rem 0; }
+    p { line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <h1>Altered voice lab</h1>
+  <p>This local prototype records up to 10 seconds, changes playback speed and tone, and lets you preview the result. It does not upload audio. A changed voice can still be recognized.</p>
+  <button id="record">Record</button><button id="stop" disabled>Stop and transform</button><button id="discard" disabled>Discard</button>
+  <p id="status" role="status">Ready. Microphone access is requested only when you record.</p>
+  <audio id="preview" controls hidden></audio>
+  <script>
+    const recordButton = document.getElementById('record');
+    const stopButton = document.getElementById('stop');
+    const discardButton = document.getElementById('discard');
+    const preview = document.getElementById('preview');
+    const status = document.getElementById('status');
+    let recorder, stream, chunks = [], timer, outputUrl, canceled = false;
+    function discard() {
+      canceled = true;
+      clearTimeout(timer);
+      if (recorder?.state === 'recording') recorder.stop();
+      stream?.getTracks().forEach(track => track.stop());
+      stream = null; recorder = null; chunks = [];
+      if (outputUrl) URL.revokeObjectURL(outputUrl);
+      outputUrl = null; preview.removeAttribute('src'); preview.hidden = true;
+      recordButton.disabled = false; stopButton.disabled = true; discardButton.disabled = true;
+      status.textContent = 'Discarded from this page. Ready to record again.';
+    }
+    function wav(buffer) {
+      const samples = buffer.getChannelData(0);
+      const bytes = new ArrayBuffer(44 + samples.length * 2);
+      const view = new DataView(bytes);
+      const str = (offset, value) => [...value].forEach((char, i) => view.setUint8(offset + i, char.charCodeAt(0)));
+      str(0, 'RIFF'); view.setUint32(4, 36 + samples.length * 2, true); str(8, 'WAVE');
+      str(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true); view.setUint32(24, buffer.sampleRate, true);
+      view.setUint32(28, buffer.sampleRate * 2, true); view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true); str(36, 'data'); view.setUint32(40, samples.length * 2, true);
+      samples.forEach((sample, i) => view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, sample)) * 32767, true));
+      return new Blob([bytes], { type: 'audio/wav' });
+    }
+    recordButton.onclick = async () => {
+      try {
+        discard();
+        canceled = false;
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        recorder = new MediaRecorder(stream);
+        chunks = [];
+        recorder.ondataavailable = event => { if (event.data.size) chunks.push(event.data); };
+        recorder.onstop = async () => {
+          stream?.getTracks().forEach(track => track.stop()); stream = null;
+          if (canceled) return;
+          try {
+            const encoded = new Blob(chunks, { type: recorder.mimeType });
+            chunks = [];
+            const context = new AudioContext();
+            const sourceBuffer = await context.decodeAudioData(await encoded.arrayBuffer());
+            const rate = 1.18;
+            const offline = new OfflineAudioContext(1, Math.ceil(sourceBuffer.length / rate), sourceBuffer.sampleRate);
+            const source = offline.createBufferSource(); source.buffer = sourceBuffer; source.playbackRate.value = rate;
+            const filter = offline.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 3400;
+            source.connect(filter).connect(offline.destination); source.start();
+            const transformed = await offline.startRendering();
+            await context.close();
+            outputUrl = URL.createObjectURL(wav(transformed));
+            preview.src = outputUrl; preview.hidden = false; discardButton.disabled = false;
+            status.textContent = 'Altered preview ready. Listen and discard when done.';
+          } catch {
+            status.textContent = 'Could not transform this recording. Discard and try again.';
+            discardButton.disabled = true;
+          } finally { recorder = null; recordButton.disabled = false; stopButton.disabled = true; }
+        };
+        recorder.start(); recordButton.disabled = true; stopButton.disabled = false;
+        status.textContent = 'Recording locally… maximum 10 seconds.';
+        timer = setTimeout(() => { if (recorder?.state === 'recording') recorder.stop(); }, 10000);
+      } catch { discard(); status.textContent = 'Microphone unavailable or permission denied.'; }
+    };
+    stopButton.onclick = () => { clearTimeout(timer); if (recorder?.state === 'recording') recorder.stop(); };
+    discardButton.onclick = discard;
+    window.addEventListener('pagehide', discard);
+  </script>
+</body>
+</html>

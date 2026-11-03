@@ -148,7 +148,7 @@ policy. The existing 24-hour room lifecycle and public identity model remain int
 
 ## Returning rooms and navigation
 
-Home, My Rooms, and Safety are bottom tabs. Home remains the launch screen and
+Home, My Rooms, Discover, and Settings are bottom tabs. Safety content opens from Settings and remains available in the age gate. Home remains the launch screen and
 contains create/join. Chat stays in the root stack above the tabs. Back preserves
 membership and returns to the originating tab; direct room entry falls back to
 My Rooms. Confirmed Leave returns to My Rooms, with that unexpired room under

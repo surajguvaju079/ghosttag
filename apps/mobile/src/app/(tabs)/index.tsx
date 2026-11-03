@@ -25,6 +25,7 @@ export default function Home() {
   const [mode, setMode] = useState<"create" | "join">("create");
   const [vibe, setVibe] = useState<Vibe>("DEEP_TALK");
   const [name, setName] = useState("");
+  const [discoverable, setDiscoverable] = useState(false);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
@@ -47,7 +48,7 @@ export default function Home() {
     try {
       const publicCode =
         mode === "create"
-          ? await api.createRoom(token, vibe, name)
+          ? await api.createRoom(token, vibe, name, discoverable)
           : await api.joinRoom(token, code);
       router.push({ pathname: "/room/[code]", params: { code: publicCode } });
     } catch (failure) {
@@ -154,6 +155,20 @@ export default function Home() {
                   onChangeText={setName}
                   maxLength={100}
                 />
+                <Pressable
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: discoverable }}
+                  accessibilityLabel="List room in Discover"
+                  onPress={() => setDiscoverable((value) => !value)}
+                  style={{ minHeight: 48, justifyContent: "center" }}
+                >
+                  <Text style={home.note}>
+                    {discoverable ? "☑" : "☐"} List this room in Discover
+                  </Text>
+                  <Text style={home.note}>
+                    Anyone eligible can find and join it. You can hide it later.
+                  </Text>
+                </Pressable>
               </>
             ) : (
               <>
@@ -243,7 +258,7 @@ export default function Home() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Safety and privacy"
-            onPress={() => router.navigate("/safety")}
+            onPress={() => router.navigate("./settings")}
             style={{
               minHeight: 48,
               justifyContent: "center",

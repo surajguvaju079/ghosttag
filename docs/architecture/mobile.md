@@ -180,6 +180,12 @@ the room name, status, member count and exit action in one row to leave more
 space for messages; sharing controls hide while typing. Copy and share actions
 give feedback on success or failure.
 
+The playground uses a server-owned daily catalog. Home and Discover show the
+same UTC topic, while both room kinds expose editable prompts and curated
+two-choice Pulses. The room controller refreshes Pulse snapshots after socket
+hints and reconnect; a playground request failure does not disable text chat.
+Room expiry and access invalidation clear Pulse state alongside messages.
+
 ## App-wide age eligibility
 
 Session bootstrap and foreground validation now use the additive identity-status

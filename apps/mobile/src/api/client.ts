@@ -7,6 +7,9 @@ import type {
   DiscoverRooms,
   Ghost,
   History,
+  PlaygroundToday,
+  Pulse,
+  PulseList,
   Membership,
   Members,
   ReportReason,
@@ -110,6 +113,11 @@ const messages: Record<string, string> = {
   INVALID_MESSAGE_PAYLOAD: "Send non-empty text, up to 2,000 characters.",
   INVALID_CURSOR: "History changed. Refresh the room to reload it.",
   RATE_LIMITED: "A little breather. Please wait before trying again.",
+  PULSE_ACTIVE: "A Pulse is already running in this room.",
+  PULSE_LIMIT: "This room has used all its Pulses.",
+  PULSE_EXPIRED: "This Pulse has ended. Try another one.",
+  PULSE_ALREADY_VOTED: "Your vote is already recorded.",
+  PULSE_NOT_FOUND: "This Pulse is no longer available.",
 };
 export function friendlyError(error: unknown, now?: number) {
   const parsed = asApiError(error);
@@ -349,6 +357,18 @@ export class ApiClient {
       `/rooms/${normalizeCode(code)}/messages?limit=50${before ? `&before=${encodeURIComponent(before)}` : ""}`,
       token,
     );
+  }
+  today(token: string) {
+    return this.request<PlaygroundToday>("/playground/today", token);
+  }
+  pulses(token: string, code: string) {
+    return this.request<PulseList>(`/rooms/${normalizeCode(code)}/pulses`, token);
+  }
+  startPulse(token: string, code: string, promptId: string) {
+    return this.request<Pulse>(`/rooms/${normalizeCode(code)}/pulses`, token, { promptId }, "POST");
+  }
+  votePulse(token: string, code: string, pulseId: string, option: "A" | "B") {
+    return this.request<Pulse>(`/rooms/${normalizeCode(code)}/pulses/${encodeURIComponent(pulseId)}/vote`, token, { option }, "POST");
   }
   report(token: string, code: string, messageId: string, reason: ReportReason) {
     return this.request<{ accepted: true }>(

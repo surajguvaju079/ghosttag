@@ -21,6 +21,7 @@ live deployment. Restarts reset counters; multiple instances multiply allowances
 | WS_CONNECT | 20 | 120 | 1 minute |
 | WS_SUBSCRIBE | 30 | 180 | 1 minute |
 | MESSAGE_REPORT | 10 | 50 | 1 day |
+| PULSE_ACTION | 30 | 120 | 1 minute |
 
 Attempt limits include rejected requests; authentication precedes identity-scoped
 REST limits. Connection network limits apply before credential lookup and identity

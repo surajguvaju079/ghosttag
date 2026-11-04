@@ -13,6 +13,7 @@ import type {
   History,
   RoomDetails,
   IdentityStatus,
+  Pulse,
 } from "../src/api/contracts";
 import { Session, type CredentialStore } from "../src/auth/session";
 import {
@@ -367,7 +368,18 @@ function harness(
   const joins: string[] = [];
   let detailsError: ApiError | undefined;
   let reportError: ApiError | undefined;
+  let pulseRecord: Pulse | undefined;
   const api = {
+    today: async () => ({ date: "2026-11-03", topic: "What made today better?", prompts: ["Tell me a small win."], pulses: [{ id: "plans", question: "Choose", optionA: "A", optionB: "B" }] }),
+    pulses: async () => ({ pulses: pulseRecord ? [pulseRecord] : [] }),
+    startPulse: async () => {
+      pulseRecord = { code: "GH-1234", pulseId: `u_${"a".repeat(32)}`, question: "Choose", optionA: "A", optionB: "B", createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 300000).toISOString(), myVote: null, results: null };
+      return pulseRecord;
+    },
+    votePulse: async (_token: string, _code: string, _id: string, option: "A" | "B") => {
+      pulseRecord = { ...pulseRecord!, myVote: option, results: { A: option === "A" ? 1 : 0, B: option === "B" ? 1 : 0 } };
+      return pulseRecord;
+    },
     details: async () => {
       if (detailsError) throw detailsError;
       return currentDetails;
@@ -444,6 +456,23 @@ function harness(
     },
   };
 }
+test("playground refreshes after live Pulse updates and records one local vote", async () => {
+  const h = harness();
+  try {
+    await h.controller.start();
+    await tick();
+    assert.equal(h.controller.state.playground?.topic, "What made today better?");
+    await h.controller.startPulse("plans");
+    assert.equal(h.controller.state.pulses[0].results, null);
+    await h.controller.votePulse(h.controller.state.pulses[0].pulseId, "A");
+    assert.deepEqual(h.controller.state.pulses[0].results, { A: 1, B: 0 });
+    h.sockets[0].emit("pulse:updated", { code: "GH-1234", pulseId: h.controller.state.pulses[0].pulseId });
+    await tick();
+    assert.equal(h.controller.state.pulses[0].myVote, "A");
+    h.controller.expire();
+    assert.deepEqual(h.controller.state.pulses, []);
+  } finally { h.controller.dispose(); }
+});
 test("room bootstrap subscribes, loads membership/history, ignores cross-room pushes, and paginates", async () => {
   const h = harness([
     { messages: [message(3), message(2)], nextCursor: message(2).messageId },

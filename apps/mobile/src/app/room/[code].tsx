@@ -1,5 +1,4 @@
 import { ConversationControls } from "../../matching/conversation-controls";
-import { conversationStarters } from "../../matching/starters";
 import {
   useEffect,
   useCallback,
@@ -88,10 +87,10 @@ function RoomScreen({ code }: { code: string }) {
     controller.snapshot,
   );
   const [now, setNow] = useState(() => Date.now());
+  const refreshedExpiredPulse = useRef<string | null>(null);
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const input = useRef<TextInput>(null);
-  const [showStarters, setShowStarters] = useState(false);
   const [inputHeight, setInputHeight] = useState(52);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   useEffect(() => {
@@ -108,7 +107,7 @@ function RoomScreen({ code }: { code: string }) {
       hide.remove();
     };
   }, []);
-  const [modal, setModal] = useState<"members" | "leave" | "report" | "participant" | "block" | "blockDone" | null>(
+  const [modal, setModal] = useState<"members" | "playground" | "leave" | "report" | "participant" | "block" | "blockDone" | null>(
     null,
   );
   const [selected, setSelected] = useState<Message | null>(null);
@@ -140,6 +139,15 @@ function RoomScreen({ code }: { code: string }) {
       const timer = setInterval(() => {
         const time = Date.now();
         setNow(time);
+        const latestPulse = controller.state.pulses[0];
+        if (
+          latestPulse &&
+          time >= Date.parse(latestPulse.expiresAt) &&
+          refreshedExpiredPulse.current !== latestPulse.pulseId
+        ) {
+          refreshedExpiredPulse.current = latestPulse.pulseId;
+          void controller.refreshPlayground();
+        }
         const expiration = controller.state.details?.room.expiresAt;
         if (
           expiration &&
@@ -652,40 +660,10 @@ function RoomScreen({ code }: { code: string }) {
               </Pressable>
             </View>
           )}
-          {!keyboardVisible &&
-            state.details?.room.kind === "MATCHED" &&
-            ready && (
-              <View style={{ gap: 6 }}>
-                <Button
-                  label={
-                    showStarters
-                      ? "Hide conversation starters"
-                      : "Need a conversation starter?"
-                  }
-                  secondary
-                  onPress={() => setShowStarters((value) => !value)}
-                />
-                {showStarters && (
-                  <ScrollView
-                    horizontal
-                    keyboardShouldPersistTaps="handled"
-                    contentContainerStyle={{ gap: 8 }}
-                  >
-                    {conversationStarters.map((starter) => (
-                      <Button
-                        key={starter}
-                        label={`Try: ${starter}`}
-                        secondary
-                        onPress={() => {
-                          setDraft(starter);
-                          setShowStarters(false);
-                        }}
-                      />
-                    ))}
-                  </ScrollView>
-                )}
-              </View>
-            )}
+          {!keyboardVisible && ready && <Button
+            label={state.pulses[0] && Date.parse(state.pulses[0].expiresAt) > now ? "Playground · Pulse live" : "Open Playground"}
+            secondary onPress={() => { setModal("playground"); void controller.refreshPlayground(); }}
+          />}
           <View style={[styles.row, { alignItems: "flex-end" }]}>
             <TextInput
               ref={input}
@@ -753,6 +731,38 @@ function RoomScreen({ code }: { code: string }) {
         >
           <View style={styles.modal}>
             <View style={styles.modalCard}>
+              {modal === "playground" && <>
+                <Text style={styles.title}>Playground</Text>
+                <ScrollView contentContainerStyle={{ gap: 12 }} style={{ maxHeight: 450 }}>
+                  {state.playground && <View style={styles.card}>
+                    <Text style={styles.label}>TODAY&apos;S QUESTION</Text>
+                    <Text>{state.playground.topic}</Text>
+                    <Button label="Use this question" secondary onPress={() => { setDraft(state.playground!.topic); setModal(null); }} />
+                  </View>}
+                  {state.pulseError && <Banner>{friendlyError(state.pulseError, now)}</Banner>}
+                  <Text style={styles.label}>QUICK PROMPTS</Text>
+                  {state.playground?.prompts.map((prompt) => <Button key={prompt} label={prompt} secondary
+                    onPress={() => { setDraft(prompt); setModal(null); }} />)}
+                  <Text style={styles.label}>PULSE · CHOOSE TOGETHER</Text>
+                  {state.pulses[0] && <View style={styles.card}>
+                    <Text style={{ fontWeight: "700" }}>{state.pulses[0].question}</Text>
+                    {state.pulses[0].results ? <Text style={styles.muted}>
+                      {state.pulses[0].optionA}: {state.pulses[0].results.A} · {state.pulses[0].optionB}: {state.pulses[0].results.B}
+                    </Text> : <Text style={styles.muted}>Vote to reveal the results.</Text>}
+                    {Date.parse(state.pulses[0].expiresAt) > now && !state.pulses[0].myVote && <>
+                      <Button label={state.pulses[0].optionA} busy={state.pulseWorking} disabled={now < state.pulseRetryAt}
+                        onPress={() => void controller.votePulse(state.pulses[0].pulseId, "A")} />
+                      <Button label={state.pulses[0].optionB} secondary busy={state.pulseWorking} disabled={now < state.pulseRetryAt}
+                        onPress={() => void controller.votePulse(state.pulses[0].pulseId, "B")} />
+                    </>}
+                    <Text style={styles.caption}>{Date.parse(state.pulses[0].expiresAt) > now ? "One vote per person · ends in a few minutes" : "This Pulse has ended"}</Text>
+                  </View>}
+                  {(!state.pulses[0] || Date.parse(state.pulses[0].expiresAt) <= now) && state.playground?.pulses.map((choice) =>
+                    <Button key={choice.id} label={`${choice.question} ${choice.optionA} or ${choice.optionB}`}
+                      secondary busy={state.pulseWorking} disabled={now < state.pulseRetryAt}
+                      onPress={() => void controller.startPulse(choice.id)} />)}
+                </ScrollView>
+              </>}
               {modal === "members" && (
                 <>
                   {state.details?.room.kind === "GROUP" && state.membership?.role === "OWNER" && <View style={styles.card}>

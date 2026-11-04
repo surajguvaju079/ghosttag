@@ -171,6 +171,111 @@ describe('Companionship and stable invites: PostgreSQL + HTTP + sockets', () => 
       socket.once('connect_error', reject);
     });
   }
+  it('runs curated Pulses with private votes, authorized updates and room expiry', async () => {
+    const today = await request(app.getHttpServer())
+      .get('/api/v1/playground/today')
+      .auth(a.token, { type: 'bearer' })
+      .expect(200);
+    expect((today.body as { date: string; topic: string }).date).toMatch(
+      /^\d{4}-\d\d-\d\d$/,
+    );
+    expect((today.body as { topic: string }).topic).toBeTruthy();
+    const unassessed = await identities.createIdentity();
+    await request(app.getHttpServer())
+      .get('/api/v1/playground/today')
+      .auth(unassessed.token, { type: 'bearer' })
+      .expect(403);
+    const created = await request(app.getHttpServer())
+      .post('/api/v1/rooms')
+      .auth(a.token, { type: 'bearer' })
+      .send({ vibe: 'DEEP_TALK' })
+      .expect(201);
+    const code = (created.body as { code: string }).code;
+    await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${code}/join`)
+      .auth(b.token, { type: 'bearer' })
+      .expect(200);
+    await request(app.getHttpServer())
+      .get(`/api/v1/rooms/${code}/pulses`)
+      .auth(outsider.token, { type: 'bearer' })
+      .expect(403);
+    const socket = await connect(b);
+    const subscription = (await socket.emitWithAck('room:subscribe', {
+      code,
+    })) as { ok: boolean };
+    expect(subscription.ok).toBe(true);
+    const update = new Promise<{ code: string; pulseId: string }>((resolve) =>
+      socket.once('pulse:updated', resolve),
+    );
+    const start = await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${code}/pulses`)
+      .auth(a.token, { type: 'bearer' })
+      .send({ promptId: 'plans' })
+      .expect(200);
+    const pulseId = (start.body as { pulseId: string }).pulseId;
+    expect(pulseId).toMatch(/^u_[a-f0-9]{32}$/);
+    expect(await update).toEqual({ code, pulseId });
+    const repeat = await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${code}/pulses`)
+      .auth(a.token, { type: 'bearer' })
+      .send({ promptId: 'plans' })
+      .expect(200);
+    expect((repeat.body as { pulseId: string }).pulseId).toBe(pulseId);
+    await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${code}/pulses`)
+      .auth(b.token, { type: 'bearer' })
+      .send({ promptId: 'travel' })
+      .expect(409);
+    const beforeVote = await request(app.getHttpServer())
+      .get(`/api/v1/rooms/${code}/pulses`)
+      .auth(b.token, { type: 'bearer' })
+      .expect(200);
+    expect(
+      (beforeVote.body as { pulses: { results: unknown }[] }).pulses[0].results,
+    ).toBeNull();
+    const voted = await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${code}/pulses/${pulseId}/vote`)
+      .auth(b.token, { type: 'bearer' })
+      .send({ option: 'A' })
+      .expect(200);
+    expect(
+      (voted.body as { results: { A: number; B: number } }).results,
+    ).toEqual({ A: 1, B: 0 });
+    await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${code}/pulses/${pulseId}/vote`)
+      .auth(b.token, { type: 'bearer' })
+      .send({ option: 'A' })
+      .expect(200);
+    await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${code}/pulses/${pulseId}/vote`)
+      .auth(b.token, { type: 'bearer' })
+      .send({ option: 'B' })
+      .expect(409);
+    const otherView = await request(app.getHttpServer())
+      .get(`/api/v1/rooms/${code}/pulses`)
+      .auth(a.token, { type: 'bearer' })
+      .expect(200);
+    expect(
+      (otherView.body as { pulses: { results: unknown }[] }).pulses[0].results,
+    ).toBeNull();
+    await prisma.poll.update({
+      where: { publicId: pulseId },
+      data: { expiresAt: new Date(0) },
+    });
+    const ended = await request(app.getHttpServer())
+      .get(`/api/v1/rooms/${code}/pulses`)
+      .auth(a.token, { type: 'bearer' })
+      .expect(200);
+    expect(
+      (ended.body as { pulses: { results: { A: number } }[] }).pulses[0].results
+        .A,
+    ).toBe(1);
+    await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${code}/pulses/${pulseId}/vote`)
+      .auth(a.token, { type: 'bearer' })
+      .send({ option: 'B' })
+      .expect(410);
+  });
   it('lists only opted-in rooms and lets the active host hide one without revoking invites', async () => {
     const hidden = await request(app.getHttpServer())
       .post('/api/v1/rooms')

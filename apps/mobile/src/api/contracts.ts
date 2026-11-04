@@ -53,6 +53,24 @@ export type ReactionUpdate = {
   reactions: { type: ReactionType; count: number; mine: boolean }[];
 };
 export type History = { messages: Message[]; nextCursor: string | null };
+export type PlaygroundToday = {
+  date: string;
+  topic: string;
+  prompts: readonly string[];
+  pulses: readonly { id: string; question: string; optionA: string; optionB: string }[];
+};
+export type Pulse = {
+  code: string;
+  pulseId: string;
+  question: string;
+  optionA: string;
+  optionB: string;
+  createdAt: string;
+  expiresAt: string;
+  myVote: "A" | "B" | null;
+  results: { A: number; B: number } | null;
+};
+export type PulseList = { pulses: Pulse[] };
 export type Participant = Ghost & { participantId: string };
 export type Subscription = {
   code: string;

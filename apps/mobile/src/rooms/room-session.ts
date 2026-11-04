@@ -5,6 +5,8 @@ import type {
   Members,
   Membership,
   Message,
+  PlaygroundToday,
+  Pulse,
   Participant,
   ReportReason,
   ReactionType,
@@ -30,6 +32,11 @@ export type RoomState = {
   membership?: Membership;
   participant?: Participant;
   messages: Message[];
+  playground?: PlaygroundToday;
+  pulses: Pulse[];
+  pulseError?: ApiError;
+  pulseRetryAt: number;
+  pulseWorking: boolean;
   pending: PendingMessage[];
   nextCursor: string | null;
   loadingOlder: boolean;
@@ -43,6 +50,9 @@ export class RoomSession {
   state: RoomState = {
     status: "loading",
     messages: [],
+    pulses: [],
+    pulseRetryAt: 0,
+    pulseWorking: false,
     pending: [],
     nextCursor: null,
     loadingOlder: false,
@@ -61,6 +71,7 @@ export class RoomSession {
   private reconnectTimer?: ReturnType<typeof setTimeout>;
   private reconnectAttempts = 0;
   private operation = false;
+  private playgroundRequest = 0;
   constructor(
     private api: ApiClient,
     private token: string,
@@ -120,7 +131,7 @@ export class RoomSession {
     this.listeners.clear();
     this.historyLoaded = false;
     this.historyAnchor = undefined;
-    this.state = { ...this.state, messages: [], pending: [] };
+    this.state = { ...this.state, messages: [], pending: [], pulses: [], playground: undefined };
   }
   expire(error?: ApiError) {
     this.active = false;
@@ -131,6 +142,8 @@ export class RoomSession {
       membership: undefined,
       participant: undefined,
       messages: [],
+      pulses: [],
+      playground: undefined,
       pending: [],
       error:
         error ??
@@ -155,6 +168,8 @@ export class RoomSession {
         membership: undefined,
         participant: undefined,
         messages: [],
+        pulses: [],
+        playground: undefined,
         pending: [],
         error: failure,
       });
@@ -169,6 +184,8 @@ export class RoomSession {
         membership: undefined,
         participant: undefined,
         messages: [],
+        pulses: [],
+        playground: undefined,
         pending: [],
         error: failure,
       });
@@ -190,6 +207,8 @@ export class RoomSession {
         membership: undefined,
         participant: undefined,
         messages: [],
+        pulses: [],
+        playground: undefined,
         pending: [],
         error: failure,
       });
@@ -268,12 +287,15 @@ export class RoomSession {
         this.historyAnchor = undefined;
         this.patch({
           messages: [],
+          pulses: [],
+          playground: undefined,
           pending: [],
           nextCursor: null,
           participant: undefined,
         });
       }
       this.patch({ details, members, membership: membership.membership });
+      void this.refreshPlayground();
       const socket = this.makeSocket();
       this.socket = socket;
       socket.on("connect", () => {
@@ -289,6 +311,9 @@ export class RoomSession {
       socket.on("message:reaction", (update: ReactionUpdate) => {
         if (this.current(epoch) && update.code === this.code)
           this.applyReaction(update);
+      });
+      socket.on("pulse:updated", (event: { code: string; pulseId: string }) => {
+        if (this.current(epoch) && event.code === this.code) void this.refreshPlayground();
       });
       socket.on(
         "room:invalidated",
@@ -396,6 +421,7 @@ export class RoomSession {
         nextCursor: hadHistory && next ? this.state.nextCursor : next,
         error: undefined,
       });
+      void this.refreshPlayground();
     } catch (error) {
       if (!this.current(epoch)) return;
       this.fail(error);
@@ -437,6 +463,51 @@ export class RoomSession {
         return { ...message, reactions: update.reactions };
       }),
     });
+  }
+  async refreshPlayground() {
+    if (this.expired() || !this.active) return;
+    const epoch = this.epoch;
+    const request = ++this.playgroundRequest;
+    try {
+      const [playground, list] = await Promise.all([
+        this.api.today(this.token),
+        this.api.pulses(this.token, this.code),
+      ]);
+      if (this.current(epoch) && request === this.playgroundRequest)
+        this.patch({ playground, pulses: list.pulses, pulseError: undefined });
+    } catch (error) {
+      if (!this.current(epoch) || request !== this.playgroundRequest) return;
+      const failure = asApiError(error);
+      if (failure.failure.statusCode === 401 || ageAccessCodes.includes(failure.failure.code)) this.fail(error);
+      else this.patch({ pulseError: failure });
+    }
+  }
+  private failPulse(error: unknown) {
+    const failure = asApiError(error);
+    if (failure.failure.statusCode === 401 || ageAccessCodes.includes(failure.failure.code)) this.fail(error);
+    else this.patch({ pulseError: failure, pulseRetryAt: Math.max(this.state.pulseRetryAt, failure.retryAt) });
+  }
+  async startPulse(promptId: string) {
+    if (this.expired() || this.state.status !== "ready" || this.state.pulseWorking || Date.now() < this.state.pulseRetryAt) return;
+    this.playgroundRequest++;
+    const epoch = this.epoch;
+    this.patch({ pulseWorking: true, pulseError: undefined });
+    try {
+      const pulse = await this.api.startPulse(this.token, this.code, promptId);
+      if (this.current(epoch)) this.patch({ pulses: [pulse, ...this.state.pulses.filter((item) => item.pulseId !== pulse.pulseId)] });
+    } catch (error) { if (this.current(epoch)) this.failPulse(error); }
+    finally { if (this.current(epoch)) this.patch({ pulseWorking: false }); }
+  }
+  async votePulse(pulseId: string, option: "A" | "B") {
+    if (this.expired() || this.state.status !== "ready" || this.state.pulseWorking || Date.now() < this.state.pulseRetryAt) return;
+    this.playgroundRequest++;
+    const epoch = this.epoch;
+    this.patch({ pulseWorking: true, pulseError: undefined });
+    try {
+      const pulse = await this.api.votePulse(this.token, this.code, pulseId, option);
+      if (this.current(epoch)) this.patch({ pulses: this.state.pulses.map((item) => item.pulseId === pulseId ? pulse : item) });
+    } catch (error) { if (this.current(epoch)) this.failPulse(error); }
+    finally { if (this.current(epoch)) this.patch({ pulseWorking: false }); }
   }
   async react(messageId: string, type: ReactionType) {
     if (this.expired() || this.state.status !== "ready" || !this.socket) return;

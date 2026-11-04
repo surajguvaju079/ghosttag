@@ -328,6 +328,30 @@ export class MessageGateway
     );
   }
 
+  async notifyPulse(code: string, pulseId: string) {
+    await Promise.all(
+      [...this.connections.values()].map(async (state) => {
+        const version = state.rooms.get(code);
+        if (!version) return;
+        try {
+          await this.messages.access(state.hash, code, (access) => {
+            if (
+              this.stopped ||
+              !state.socket.connected ||
+              state.rooms.get(code) !== version
+            )
+              return;
+            this.assertSubscription(access, version);
+            this.messages.assertLive(access);
+            state.socket.volatile.emit('pulse:updated', { code, pulseId });
+          });
+        } catch (error) {
+          this.invalidate(state, code, version, publicSocketError(error));
+        }
+      }),
+    );
+  }
+
   async sweep() {
     if (this.sweeping || this.stopped) return;
     this.sweeping = true;

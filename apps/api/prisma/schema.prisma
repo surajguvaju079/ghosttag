@@ -234,6 +234,8 @@ model Reaction {
 
 model Poll {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  publicId  String   @unique @default(dbgenerated("('u_'::text || replace((gen_random_uuid())::text, '-'::text, ''::text))")) @db.VarChar(34)
+  promptId  String?  @db.VarChar(60)
   roomId    String   @db.Uuid
   question  String   @db.VarChar(500)
   optionA   String   @db.VarChar(100)

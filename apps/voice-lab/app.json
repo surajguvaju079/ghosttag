@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "GhostTag Voice Lab",
+    "slug": "ghosttag-voice-lab",
+    "scheme": "ghosttagvoicelab",
+    "ios": { "bundleIdentifier": "com.ghosttag.voicelab" },
+    "android": { "package": "com.ghosttag.voicelab" },
+    "plugins": [["react-native-audio-api", {
+      "iosMicrophonePermission": "GhostTag Voice Lab records a short local voice sample for privacy testing.",
+      "iosBackgroundMode": false,
+      "androidForegroundService": false,
+      "androidPermissions": ["android.permission.RECORD_AUDIO"]
+    }]]
+  }
+}

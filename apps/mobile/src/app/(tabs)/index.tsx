@@ -1,4 +1,5 @@
 import { MatchingHomeEntry } from "../../matching/home-entry";
+import { DailyTopic } from "../../components/daily-topic";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -75,6 +76,7 @@ export default function Home() {
             <BrandMark />
           </View>
           <MatchingHomeEntry />
+          <DailyTopic />
           <View style={home.card}>
             <LinearGradient
               pointerEvents="none"

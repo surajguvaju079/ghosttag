@@ -11,6 +11,7 @@ import { useSession } from "../../auth/provider";
 import { friendlyError } from "../../api/client";
 import type { DiscoverRoom } from "../../api/contracts";
 import { vibeLabel } from "../../rooms/vibes";
+import { DailyTopic } from "../../components/daily-topic";
 import { Banner, Button, Screen, Text, styles } from "../../ui/primitives";
 
 export default function Discover() {
@@ -84,6 +85,7 @@ export default function Discover() {
       const code = await api.joinInvite(token, room.code, room.inviteId);
       router.push({ pathname: "/room/[code]", params: { code } });
     } catch (failure) {
+      await refresh();
       setError(failure);
     } finally {
       setJoining(null);
@@ -107,6 +109,7 @@ export default function Discover() {
           Drop into a conversation that feels right. Rooms here are listed by
           their hosts.
         </Text>
+        <DailyTopic />
         {loading && !loaded && <ActivityIndicator color="#B99AFF" />}
         {error !== undefined && <Banner>{friendlyError(error, now)}</Banner>}
         {loaded && visible.length === 0 && (

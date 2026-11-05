@@ -13,6 +13,8 @@ export default function App() {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const generation = useRef(0);
   const recording = useRef(false);
+  const starting = useRef(false);
+  const playing = useRef(false);
   const busy = useRef(false);
   const [status, setStatus] = useState('Ready. Audio stays on this phone.');
   const [phase, setPhase] = useState<'ready' | 'recording' | 'processing' | 'preview'>('ready');
@@ -21,8 +23,19 @@ export default function App() {
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
   }
+  function deleteFile(file: File | null) {
+    try { file?.delete(); } catch { /* A native interruption may already have removed it. */ }
+  }
+  function deletePaths(paths: string[]) {
+    for (const path of paths) deleteFile(new File(path));
+  }
+  function deleteStoppedRecording() {
+    const result = AudioRecorder.consumeLastRecordingResult();
+    if (result) deletePaths(result.paths);
+  }
   async function discard() {
     generation.current++;
+    const wasProcessing = busy.current;
     clearTimer();
     const activePlayer = player.current;
     player.current = null;
@@ -30,15 +43,15 @@ export default function App() {
     if (recording.current && recorder.current) {
       recording.current = false;
       const result = await recorder.current.stop().catch(() => null);
-      if (result?.status === 'success')
-        for (const path of result.paths) new File(path).delete();
+      if (result?.status === 'success') deletePaths(result.paths);
     }
+    deleteStoppedRecording();
     await AudioManager.setAudioSessionActivity(false).catch(() => {});
-    if (output.current) output.current.delete();
+    deleteFile(output.current);
     output.current = null;
-    busy.current = false;
-    setPhase('ready');
-    setStatus('Discarded. Ready to record again.');
+    busy.current = wasProcessing;
+    setPhase(wasProcessing ? 'processing' : 'ready');
+    setStatus(wasProcessing ? 'Discarding local audio…' : 'Discarded. Ready to record again.');
   }
   async function stopAndTransform() {
     if (!recording.current || !recorder.current || busy.current) return;
@@ -48,17 +61,20 @@ export default function App() {
     clearTimer();
     setPhase('processing');
     setStatus('Changing the local recording…');
-    let sourceFile: File | null = null;
+    let recordedPaths: string[] = [];
+    let context: AudioContext | null = null;
+    let producedFile: File | null = null;
     try {
       const recorded = await recorder.current.stop();
-      await AudioManager.setAudioSessionActivity(false);
+      if (run === generation.current) await AudioManager.setAudioSessionActivity(false);
       if (recorded.status !== 'success' || !recorded.paths[0]) throw new Error('Recording unavailable');
-      sourceFile = new File(recorded.paths[0]);
+      recordedPaths = recorded.paths;
       if (run !== generation.current) return;
-      const context = new AudioContext();
-      const decoded = await context.decodeAudioData(sourceFile.uri);
-      sourceFile.delete(); sourceFile = null;
+      context = new AudioContext();
+      const decoded = await context.decodeAudioData(new File(recorded.paths[0]).uri);
+      deletePaths(recordedPaths); recordedPaths = [];
       await context.close();
+      context = null;
       if (run !== generation.current) return;
       const rate = 1.18;
       const offline = new OfflineAudioContext({
@@ -75,11 +91,11 @@ export default function App() {
       source.connect(filter); filter.connect(offline.destination); source.start();
       const altered = await offline.startRendering();
       if (run !== generation.current) return;
-      const file = new File(Paths.cache, `ghosttag_altered_${Date.now()}.wav`);
-      file.create();
-      await file.write(monoWav(altered.getChannelData(0), altered.sampleRate));
-      if (run !== generation.current) { file.delete(); return; }
-      output.current = file;
+      producedFile = new File(Paths.cache, `ghosttag_altered_${Date.now()}_${run}.wav`);
+      producedFile.create();
+      await producedFile.write(monoWav(altered.getChannelData(0), altered.sampleRate));
+      if (run !== generation.current) return;
+      output.current = producedFile;
       setPhase('preview');
       setStatus('Altered preview ready. A listener may still recognize you.');
     } catch {
@@ -88,22 +104,36 @@ export default function App() {
         setStatus('Could not make the altered preview. Please try again.');
       }
     } finally {
-      sourceFile?.delete();
+      deletePaths(recordedPaths);
+      deleteStoppedRecording();
+      if (context) await context.close().catch(() => {});
+      if (producedFile && output.current !== producedFile) deleteFile(producedFile);
+      if (run === generation.current) {
+        await AudioManager.setAudioSessionActivity(false).catch(() => {});
+      } else {
+        setPhase('ready');
+        setStatus('Discarded. Ready to record again.');
+      }
       busy.current = false;
     }
   }
   async function start() {
-    if (recording.current || busy.current) return;
+    if (recording.current || busy.current || starting.current) return;
+    starting.current = true;
     await discard();
     const run = generation.current;
     try {
+      if (AppState.currentState !== 'active') return;
       const permission = await AudioManager.requestRecordingPermissions();
+      if (run !== generation.current || AppState.currentState !== 'active') return;
       if (permission !== 'Granted') { setStatus('Microphone permission was denied.'); return; }
       await AudioManager.setAudioSessionActivity(true);
-      if (run !== generation.current) return;
+      if (run !== generation.current || AppState.currentState !== 'active') {
+        await AudioManager.setAudioSessionActivity(false); return;
+      }
       const current = recorder.current ?? new AudioRecorder();
       recorder.current = current;
-      current.enableFileOutput();
+      if (current.enableFileOutput().status !== 'success') throw new Error('File output unavailable');
       const result = await current.start();
       if (result.status !== 'success') throw new Error('Recording failed');
       recording.current = true;
@@ -113,27 +143,42 @@ export default function App() {
       timer.current = setTimeout(() => { void stopAndTransform(); }, 10_000);
     } catch {
       await AudioManager.setAudioSessionActivity(false).catch(() => {});
-      setStatus('Microphone or recording unavailable.');
+      deleteStoppedRecording();
+      if (run === generation.current) setStatus('Microphone or recording unavailable.');
+    } finally {
+      starting.current = false;
     }
   }
   async function play() {
-    if (!output.current || busy.current) return;
+    if (!output.current || busy.current || playing.current) return;
+    playing.current = true;
+    const run = generation.current;
     try {
-      const context = player.current ?? new AudioContext();
+      await player.current?.close();
+      if (run !== generation.current) return;
+      const context = new AudioContext();
       player.current = context;
       const buffer = await context.decodeAudioData(output.current.uri);
+      if (run !== generation.current || player.current !== context) return;
       const source = context.createBufferSource();
       source.buffer = buffer;
       source.connect(context.destination);
       if (context.state === 'suspended') await context.resume();
       source.start();
-    } catch { setStatus('Preview could not play on this device.'); }
+    } catch {
+      if (run === generation.current) setStatus('Preview could not play on this device.');
+      const failedPlayer = player.current;
+      player.current = null;
+      await failedPlayer?.close().catch(() => {});
+    } finally {
+      playing.current = false;
+    }
   }
   useEffect(() => {
     const listener = AppState.addEventListener('change', (next) => {
       if (next !== 'active') void discard();
     });
-    return () => { listener.remove(); void discard(); void player.current?.close(); };
+    return () => { listener.remove(); void discard(); };
   }, []);
   return <ScrollView contentContainerStyle={styles.screen}>
     <Text style={styles.title}>GhostTag Voice Lab</Text>

@@ -67,6 +67,7 @@ export class MatchingService {
         search.leaseUntil.getTime() > Date.now()
           ? {
               id: search.publicId,
+              topic: search.topic,
               expiresAt: search.expiresAt.toISOString(),
               leaseUntil: search.leaseUntil.toISOString(),
             }
@@ -81,9 +82,12 @@ export class MatchingService {
       !body ||
       typeof body !== 'object' ||
       Array.isArray(body) ||
-      Object.keys(body).length !== 1 ||
+      !Object.keys(body).every((key) => ['language', 'topic'].includes(key)) ||
       !('language' in body) ||
-      body.language !== 'en'
+      body.language !== 'en' ||
+      ('topic' in body &&
+        (typeof body.topic !== 'string' ||
+          !['open', 'music', 'games', 'deep-talk'].includes(body.topic)))
     )
       throw new BadRequestException({
         code: 'INVALID_MATCH_SEARCH',
@@ -97,7 +101,12 @@ export class MatchingService {
         });
       const current = await this.snapshot(tx, userId);
       if (current.status === 'MATCHED') return current;
-      if (!current.search) await this.repository.start(tx, userId);
+      if (!current.search)
+        await this.repository.start(
+          tx,
+          userId,
+          'topic' in body ? (body.topic as string) : 'open',
+        );
       return this.tryPair(tx, userId);
     });
   }
@@ -127,7 +136,13 @@ export class MatchingService {
     });
   }
   private async tryPair(tx: Prisma.TransactionClient, userId: string) {
-    for (const candidate of await this.repository.candidates(tx, userId)) {
+    const search = await this.repository.search(tx, userId);
+    if (!search) return this.snapshot(tx, userId);
+    for (const candidate of await this.repository.candidates(
+      tx,
+      userId,
+      search.topic,
+    )) {
       if (await this.repository.blocked(tx, userId, candidate.userId)) continue;
       if (await this.repository.activeSession(tx, candidate.userId)) continue;
       const credential = await this.repository.credential(tx, candidate.userId);
@@ -148,6 +163,7 @@ export class MatchingService {
       const now = Date.now();
       if (
         !own ||
+        own.topic !== candidate.topic ||
         own.expiresAt.getTime() <= now ||
         own.leaseUntil.getTime() <= now
       )

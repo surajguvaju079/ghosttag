@@ -9,6 +9,11 @@ The daily topic is chosen deterministically from the catalog by UTC day. Reading
 it does not persist an event. A prompt is inserted into the local text composer
 and becomes an ordinary reportable message only if the member sends it.
 
+The mobile Playground also offers three text-only cooperative activities: Story
+relay, Word chain, and Three clues. Their instructions are local composer starters;
+members review and send them as ordinary messages. No separate game session,
+score, leaderboard, or activity history is stored.
+
 Any active room member may start one curated Pulse at a time. The question and
 two options are resolved from a catalog ID, not client text. A Pulse lasts five
 minutes at most and cannot outlive its room. Rooms may create at most ten Pulses.

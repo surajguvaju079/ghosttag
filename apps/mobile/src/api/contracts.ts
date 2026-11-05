@@ -144,6 +144,6 @@ export type MatchState = {
   status: "IDLE" | "WAITING" | "MATCHED";
   matchingEnabled: boolean;
   blockedCount: number;
-  search: { id: string; expiresAt: string; leaseUntil: string } | null;
+  search: { id: string; topic: string; expiresAt: string; leaseUntil: string } | null;
   session: MatchSession | null;
 };

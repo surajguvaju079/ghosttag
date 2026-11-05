@@ -269,12 +269,14 @@ model PollVote {
 model MatchSearch {
   userId    String @id @db.Uuid
   publicId  String @unique @default(dbgenerated("('s_'::text || replace((gen_random_uuid())::text, '-'::text, ''::text))")) @db.VarChar(34)
+  topic     String @default("open") @db.VarChar(32)
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   expiresAt DateTime @db.Timestamptz(6)
   leaseUntil DateTime @db.Timestamptz(6)
   user AnonymousUser @relation(fields: [userId], references: [id], onDelete: Cascade)
   @@index([expiresAt])
   @@index([leaseUntil])
+  @@index([topic, createdAt])
   @@map("match_searches")
 }
 

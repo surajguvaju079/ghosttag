@@ -51,11 +51,12 @@ export class MatchingRepository {
       include: { room: true },
     });
   }
-  candidates(tx: Prisma.TransactionClient, userId: string) {
+  candidates(tx: Prisma.TransactionClient, userId: string, topic: string) {
     const now = new Date();
     return tx.matchSearch.findMany({
       where: {
         userId: { not: userId },
+        topic,
         expiresAt: { gt: now },
         leaseUntil: { gt: now },
       },
@@ -78,11 +79,12 @@ export class MatchingRepository {
       select: { tokenHash: true },
     });
   }
-  start(tx: Prisma.TransactionClient, userId: string) {
+  start(tx: Prisma.TransactionClient, userId: string, topic: string) {
     const now = Date.now();
     return tx.matchSearch.create({
       data: {
         userId,
+        topic,
         expiresAt: new Date(now + 120_000),
         leaseUntil: new Date(now + 30_000),
       },

@@ -24,7 +24,12 @@ interface State {
   status: 'IDLE' | 'WAITING' | 'MATCHED';
   matchingEnabled: boolean;
   blockedCount: number;
-  search: null | { id: string; expiresAt: string; leaseUntil: string };
+  search: null | {
+    id: string;
+    topic: string;
+    expiresAt: string;
+    leaseUntil: string;
+  };
   session: null | {
     id: string;
     code: string;
@@ -124,11 +129,11 @@ describe('Companionship and stable invites: PostgreSQL + HTTP + sockets', () => 
       );
     await admin?.$disconnect();
   });
-  function start(user = a) {
+  function start(user = a, topic?: string) {
     return request(app.getHttpServer())
       .post('/api/v1/matching/search')
       .auth(user.token, { type: 'bearer' })
-      .send({ language: 'en' });
+      .send({ language: 'en', ...(topic ? { topic } : {}) });
   }
   async function state(user = a) {
     return (
@@ -398,6 +403,7 @@ describe('Companionship and stable invites: PostgreSQL + HTTP + sockets', () => 
       .auth(a.token, { type: 'bearer' })
       .send({ language: 'en', userId: b.identityId })
       .expect(400);
+    await start(a, 'unknown').expect(400);
   });
   it('starts idempotently without self matching and fixes the deadline at two minutes', async () => {
     const before = Date.now();
@@ -405,6 +411,7 @@ describe('Companionship and stable invites: PostgreSQL + HTTP + sockets', () => 
     responses.forEach((response) => expect(response.status).toBe(200));
     const result = responses[0].body as State;
     expect(result.status).toBe('WAITING');
+    expect(result.search!.topic).toBe('open');
     expect(
       responses.map((response) => (response.body as State).search!.id),
     ).toEqual([result.search!.id, result.search!.id, result.search!.id]);
@@ -417,6 +424,21 @@ describe('Companionship and stable invites: PostgreSQL + HTTP + sockets', () => 
     expect(
       Date.parse(renewed.search!.leaseUntil) - Date.now(),
     ).toBeLessThanOrEqual(30_000);
+  });
+  it('pairs only searches with the same selected topic', async () => {
+    const music = (await start(a, 'music').expect(200)).body as State;
+    expect(music.search?.topic).toBe('music');
+    expect(((await start(a, 'games').expect(200)).body as State).search).toEqual(
+      music.search,
+    );
+    expect(((await start(b, 'games').expect(200)).body as State).status).toBe(
+      'WAITING',
+    );
+    expect((await state(a)).status).toBe('WAITING');
+    const paired = (await start(outsider, 'music').expect(200)).body as State;
+    expect(paired.status).toBe('MATCHED');
+    expect((await state(a)).session?.id).toBe(paired.session?.id);
+    expect((await state(b)).search?.topic).toBe('games');
   });
   it('pairs two identities atomically and returns only public identifiers', async () => {
     const matched = await pair();

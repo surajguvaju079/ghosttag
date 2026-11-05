@@ -1,5 +1,6 @@
 import { ApiClient, asApiError } from "../api/client";
 import type { MatchState } from "../api/contracts";
+import type { MatchTopic } from "./topics";
 export type QueueState = {
   data?: MatchState;
   busy: boolean;
@@ -39,9 +40,9 @@ export class MatchingQueue {
     this.active = true;
     await this.request(() => this.api.matchingState(this.token));
   }
-  async start() {
+  async start(topic: MatchTopic = "open") {
     if (this.state.busy || Date.now() < this.state.retryAt) return;
-    await this.request(() => this.api.startMatch(this.token), true);
+    await this.request(() => this.api.startMatch(this.token, topic), true);
   }
   async cancel() {
     const id = this.state.data?.search?.id;

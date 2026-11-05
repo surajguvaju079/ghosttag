@@ -5,6 +5,15 @@ private two-person rooms, Block and end, stable group-room links and browser fal
 pages in portfolio-suraj. Both SOCIAL_ACCESS_ENABLED and MATCHING_ENABLED default
 false. No deployment, signing, or public rollout is authorized by this milestone.
 
+Themed matching adds an optional search topic (`open`, `music`, `games`, or
+`deep-talk`). New clients choose before searching; older clients default to
+`open`. A search pairs only with another active search for the exact same topic.
+There is no cross-topic fallback, preference history, or topic in a public
+profile. A running search keeps its topic until cancelled or expired. The same
+two-minute search deadline applies; someone may wait longer or need to search
+again when their topic has fewer people. Migration
+`20261109000000_matching_topics` adds the indexed topic to temporary searches.
+
 ## State and authorization
 
 PostgreSQL stores one search per identity (public s_ UUID, two-minute deadline,

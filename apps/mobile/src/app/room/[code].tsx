@@ -32,6 +32,7 @@ import {
 } from "../../api/contracts";
 import { RoomShare } from "../../components/room-share";
 import { RoomSession } from "../../rooms/room-session";
+import { roomActivities } from "../../rooms/activities";
 import { socketTransport } from "../../messaging/transport";
 import { firstMessagePart, validText } from "../../messaging/history";
 import { avatar, vibeLabel } from "../../rooms/vibes";
@@ -743,6 +744,13 @@ function RoomScreen({ code }: { code: string }) {
                   <Text style={styles.label}>QUICK PROMPTS</Text>
                   {state.playground?.prompts.map((prompt) => <Button key={prompt} label={prompt} secondary
                     onPress={() => { setDraft(prompt); setModal(null); }} />)}
+                  <Text style={styles.label}>PLAY TOGETHER</Text>
+                  {roomActivities.map((activity) => <View key={activity.id} style={styles.card}>
+                    <Text style={{ fontWeight: "700" }}>{activity.title}</Text>
+                    <Text style={styles.muted}>{activity.description}</Text>
+                    <Button label="Put starter in chat" secondary
+                      onPress={() => { setDraft(activity.starter); setModal(null); }} />
+                  </View>)}
                   <Text style={styles.label}>PULSE · CHOOSE TOGETHER</Text>
                   {state.pulses[0] && <View style={styles.card}>
                     <Text style={{ fontWeight: "700" }}>{state.pulses[0].question}</Text>

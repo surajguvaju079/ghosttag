@@ -25,6 +25,7 @@ const waiting: MatchState = {
   status: "WAITING",
   search: {
     id: `s_${"a".repeat(32)}`,
+    topic: "open",
     expiresAt: new Date(Date.now() + 120000).toISOString(),
     leaseUntil: new Date(Date.now() + 30000).toISOString(),
   },
@@ -118,6 +119,23 @@ test("queue starts/resumes without duplicate starts or automatic restart after t
     await queue.cancel();
     assert.equal(queue.state.data?.status, "IDLE");
     assert.equal(starts, 1);
+  } finally {
+    queue.pause();
+  }
+});
+test("queue forwards the selected topic when starting a search", async () => {
+  const fake = api();
+  let received = "";
+  fake.startMatch = async (_token, topic) => {
+    received = topic ?? "open";
+    return { ...waiting, search: { ...waiting.search!, topic: received } };
+  };
+  const queue = new MatchingQueue(fake, "token", () => {});
+  try {
+    await queue.resume();
+    await queue.start("music");
+    assert.equal(received, "music");
+    assert.equal(queue.state.data?.search?.topic, "music");
   } finally {
     queue.pause();
   }

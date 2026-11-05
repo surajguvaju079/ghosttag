@@ -231,11 +231,11 @@ export class ApiClient {
   matchingState(token: string) {
     return this.request<MatchState>("/matching/state", token);
   }
-  startMatch(token: string) {
+  startMatch(token: string, topic = "open") {
     return this.request<MatchState>(
       "/matching/search",
       token,
-      { language: "en" },
+      { language: "en", topic },
       "POST",
     );
   }

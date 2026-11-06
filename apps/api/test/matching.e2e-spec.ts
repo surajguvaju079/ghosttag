@@ -33,6 +33,7 @@ interface State {
   session: null | {
     id: string;
     code: string;
+    topic: string;
     expiresAt: string;
     extended: boolean;
     extensionRequested: boolean;
@@ -428,16 +429,18 @@ describe('Companionship and stable invites: PostgreSQL + HTTP + sockets', () => 
   it('pairs only searches with the same selected topic', async () => {
     const music = (await start(a, 'music').expect(200)).body as State;
     expect(music.search?.topic).toBe('music');
-    expect(((await start(a, 'games').expect(200)).body as State).search).toEqual(
-      music.search,
-    );
+    expect(
+      ((await start(a, 'games').expect(200)).body as State).search,
+    ).toEqual(music.search);
     expect(((await start(b, 'games').expect(200)).body as State).status).toBe(
       'WAITING',
     );
     expect((await state(a)).status).toBe('WAITING');
     const paired = (await start(outsider, 'music').expect(200)).body as State;
     expect(paired.status).toBe('MATCHED');
+    expect(paired.session?.topic).toBe('music');
     expect((await state(a)).session?.id).toBe(paired.session?.id);
+    expect((await state(a)).session?.topic).toBe('music');
     expect((await state(b)).search?.topic).toBe('games');
   });
   it('pairs two identities atomically and returns only public identifiers', async () => {
@@ -455,6 +458,7 @@ describe('Companionship and stable invites: PostgreSQL + HTTP + sockets', () => 
     expect(room.inviteId).toBeNull();
     expect(room.memberships).toHaveLength(2);
     expect(room.expiresAt.getTime() - room.createdAt.getTime()).toBe(900_000);
+    expect(first.session?.topic).toBe('open');
     expect(
       await prisma.matchSearch.count({
         where: { userId: { in: [a.identityId, b.identityId] } },

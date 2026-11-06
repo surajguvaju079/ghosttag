@@ -370,7 +370,7 @@ function harness(
   let reportError: ApiError | undefined;
   let pulseRecord: Pulse | undefined;
   const api = {
-    today: async () => ({ date: "2026-11-03", topic: "What made today better?", prompts: ["Tell me a small win."], pulses: [{ id: "plans", question: "Choose", optionA: "A", optionB: "B" }] }),
+    today: async () => ({ date: "2026-11-03", topic: "What made today better?", story: "A note arrived at the door.", prompts: ["Tell me a small win."], pulses: [{ id: "plans", question: "Choose", optionA: "A", optionB: "B" }] }),
     pulses: async () => ({ pulses: pulseRecord ? [pulseRecord] : [] }),
     startPulse: async () => {
       pulseRecord = { code: "GH-1234", pulseId: `u_${"a".repeat(32)}`, question: "Choose", optionA: "A", optionB: "B", createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 300000).toISOString(), myVote: null, results: null };

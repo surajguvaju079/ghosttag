@@ -9,6 +9,14 @@ The daily topic is chosen deterministically from the catalog by UTC day. Reading
 it does not persist an event. A prompt is inserted into the local text composer
 and becomes an ordinary reportable message only if the member sends it.
 
+The same UTC day also selects one curated collaborative story setup and three
+prompts and Pulse choices. The story is previewed on Home and Discover. In a room,
+members can place it in the composer with a one-sentence-each instruction; any
+contribution is an ordinary message. Choosing any Playground starter appends it
+after an existing draft, preserving the draft text. The room refreshes the catalog
+after UTC rollover and retries a failed refresh. All Pulse IDs remain accepted
+from the full catalog so older clients can still start their known choices.
+
 The mobile Playground also offers three text-only cooperative activities: Story
 relay, Word chain, and Three clues. Their instructions are local composer starters;
 members review and send them as ordinary messages. No separate game session,

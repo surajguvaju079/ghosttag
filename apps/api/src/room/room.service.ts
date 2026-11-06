@@ -184,6 +184,7 @@ export class RoomService {
     tx: Prisma.TransactionClient,
     userAId: string,
     userBId: string,
+    topic: string,
   ) {
     const now = new Date();
     const room = await tx.room.create({
@@ -209,7 +210,7 @@ export class RoomService {
       });
     }
     await tx.matchSession.create({
-      data: { roomId: room.id, userAId, userBId },
+      data: { roomId: room.id, userAId, userBId, topic },
     });
     return room;
   }

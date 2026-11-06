@@ -52,6 +52,7 @@ export class MatchingService {
         ? {
             id: session.publicId,
             code: session.room.code,
+            topic: session.topic,
             expiresAt: session.room.expiresAt.toISOString(),
             extended: session.extended,
             extensionRequested:
@@ -173,7 +174,12 @@ export class MatchingService {
         candidate.leaseUntil.getTime() <= now
       )
         continue;
-      await this.rooms.createMatchedRoom(tx, candidate.userId, userId);
+      await this.rooms.createMatchedRoom(
+        tx,
+        candidate.userId,
+        userId,
+        own.topic,
+      );
       await this.repository.removeSearch(tx, userId);
       await this.repository.removeSearch(tx, candidate.userId);
       break;

@@ -5,13 +5,15 @@ access. Room Pulse endpoints additionally require an active membership and an
 accessible room. Responses use `Cache-Control: no-store` where read state is
 returned; clients should not store room content after room expiry.
 
-- `GET /api/v1/playground/today` returns `{date, topic, prompts, pulses}`.
-  `date` is UTC `YYYY-MM-DD`; each Pulse choice has `id`, `question`, `optionA`,
-  and `optionB`.
+- `GET /api/v1/playground/today` returns `{date, topic, story, prompts, pulses}`.
+  `date` is UTC `YYYY-MM-DD`; `story` is a shared daily story setup. Three
+  prompts and three Pulse choices rotate by UTC day. Each Pulse choice has `id`,
+  `question`, `optionA`, and `optionB`.
 - `GET /api/v1/rooms/:code/pulses` returns `{pulses}` (newest first, at most ten).
 - `POST /api/v1/rooms/:code/pulses` accepts `{promptId}` from the catalog and
   returns the Pulse. One active Pulse is allowed; retrying the same prompt while
   active returns the same Pulse. A different prompt returns `409 PULSE_ACTIVE`.
+  IDs from previous daily selections remain accepted for older clients.
 - `POST /api/v1/rooms/:code/pulses/:pulseId/vote` accepts `{option:"A"|"B"}`
   and returns the updated Pulse. The same vote is idempotent; changing it returns
   `409 PULSE_ALREADY_VOTED`. An expired Pulse returns `410 PULSE_EXPIRED`.

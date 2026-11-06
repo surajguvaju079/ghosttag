@@ -283,6 +283,7 @@ model MatchSearch {
 model MatchSession {
   roomId String @id @db.Uuid
   publicId String @unique @default(dbgenerated("('c_'::text || replace((gen_random_uuid())::text, '-'::text, ''::text))")) @db.VarChar(34)
+  topic String @default("open") @db.VarChar(32)
   userAId String @db.Uuid
   userBId String @db.Uuid
   extended Boolean @default(false)

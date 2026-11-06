@@ -185,6 +185,9 @@ same UTC topic, while both room kinds expose editable prompts and curated
 two-choice Pulses. The room controller refreshes Pulse snapshots after socket
 hints and reconnect; a playground request failure does not disable text chat.
 Room expiry and access invalidation clear Pulse state alongside messages.
+Home and Discover also preview the shared daily story. The room Playground groups
+Today, Activities and Pulses; choosing text appends it to the unsent draft. Matched
+rooms show the temporary session's chosen topic, including after app restart.
 
 ## App-wide age eligibility
 

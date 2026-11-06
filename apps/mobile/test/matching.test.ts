@@ -3,6 +3,7 @@ import { test } from "node:test";
 import type { MatchState } from "../src/api/contracts";
 import { ApiError } from "../src/api/client";
 import { MatchingQueue } from "../src/matching/queue";
+import { insertStarter } from "../src/rooms/insert-starter";
 import {
   inviteLink,
   parseInvite,
@@ -36,6 +37,7 @@ const matched: MatchState = {
   session: {
     id: `c_${"b".repeat(32)}`,
     code: "GH-1234",
+    topic: "open",
     expiresAt: new Date(Date.now() + 900000).toISOString(),
     extended: false,
     extensionRequested: false,
@@ -122,6 +124,13 @@ test("queue starts/resumes without duplicate starts or automatic restart after t
   } finally {
     queue.pause();
   }
+});
+test("playground insertion keeps the entire existing draft", () => {
+  assert.equal(insertStarter("", "New story"), "New story");
+  assert.equal(insertStarter("My thought", "New story"), "My thought\n\nNew story");
+  assert.equal(insertStarter("Line one\n", "New story"), "Line one\n\nNew story");
+  const longDraft = "x".repeat(2100);
+  assert.equal(insertStarter(longDraft, "New story").slice(0, 2100), longDraft);
 });
 test("queue forwards the selected topic when starting a search", async () => {
   const fake = api();

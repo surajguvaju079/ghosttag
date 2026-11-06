@@ -56,6 +56,7 @@ export type History = { messages: Message[]; nextCursor: string | null };
 export type PlaygroundToday = {
   date: string;
   topic: string;
+  story: string;
   prompts: readonly string[];
   pulses: readonly { id: string; question: string; optionA: string; optionB: string }[];
 };
@@ -135,6 +136,7 @@ export const ageAccessCodes = [
 export type MatchSession = {
   id: string;
   code: string;
+  topic: string;
   expiresAt: string;
   extended: boolean;
   extensionRequested: boolean;

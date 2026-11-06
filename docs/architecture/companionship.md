@@ -13,6 +13,10 @@ profile. A running search keeps its topic until cancelled or expired. The same
 two-minute search deadline applies; someone may wait longer or need to search
 again when their topic has fewer people. Migration
 `20261109000000_matching_topics` adds the indexed topic to temporary searches.
+Migration `20261110000000_match_session_topic` saves the chosen topic on the
+temporary matched session and defaults existing sessions to `open`. The topic is
+shown to both room members through the matching state response, including after
+reopening the room. It is removed with the session during normal room cleanup.
 
 ## State and authorization
 

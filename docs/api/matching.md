@@ -10,3 +10,7 @@ includes `topic`. While a search is active, a repeated start returns that search
 with its original topic; changing topics requires cancelling and starting again.
 Candidates must have the same topic. Search and room lifetimes, block checks,
 eligibility, and rate limits are unchanged.
+
+The `session` object also includes the chosen `topic`. Existing sessions are
+backfilled as `open`; newly paired sessions retain their search topic until the
+temporary room is removed.

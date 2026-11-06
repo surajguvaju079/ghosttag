@@ -4,6 +4,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useSession } from "../auth/provider";
 import { asApiError, friendlyError } from "../api/client";
 import type { MatchSession } from "../api/contracts";
+import { topicLabel } from "./topics";
 import type { RoomSession } from "../rooms/room-session";
 import { Banner, Button, Text, styles } from "../ui/primitives";
 export function ConversationControls({
@@ -91,6 +92,7 @@ export function ConversationControls({
   return (
     <View style={{ gap: 8 }}>
       <Text style={styles.caption}>
+        {match ? `Topic: ${topicLabel(match.topic)} · ` : ""}
         {match?.extended
           ? "Both chose to stay · 30-minute maximum"
           : match?.partnerRequested

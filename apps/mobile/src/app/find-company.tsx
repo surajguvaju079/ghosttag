@@ -1,11 +1,11 @@
 import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
-import { AppState, View, ScrollView } from "react-native";
+import { AppState, Pressable, View, ScrollView } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useSession } from "../auth/provider";
 import { friendlyError } from "../api/client";
 import { MatchingQueue } from "../matching/queue";
 import { matchTopics, topicLabel, type MatchTopic } from "../matching/topics";
-import { Banner, Button, Screen, Text, styles } from "../ui/primitives";
+import { Banner, Button, palette, Screen, Text, styles } from "../ui/primitives";
 export default function FindCompany() {
   const { api, token } = useSession();
   const router = useRouter();
@@ -59,15 +59,18 @@ export default function FindCompany() {
           <Banner>{friendlyError(state.error, now)}</Banner>
         )}
         {data?.status === "MATCHED" && data.session ? (
-          <Button
-            label="Resume conversation"
-            onPress={() =>
-              router.replace({
-                pathname: "/room/[code]",
-                params: { code: data.session!.code },
-              })
-            }
-          />
+          <View style={styles.card}>
+            <Text>{data.session.topic === "open" ? "Your conversation is ready" : `Conversation topic: ${topicLabel(data.session.topic)}`}</Text>
+            <Button
+              label="Resume conversation"
+              onPress={() =>
+                router.replace({
+                  pathname: "/room/[code]",
+                  params: { code: data.session!.code },
+                })
+              }
+            />
+          </View>
         ) : data?.status === "WAITING" ? (
           <View style={styles.card}>
             <Text>Finding someone for {topicLabel(data.search!.topic)}…</Text>
@@ -90,12 +93,26 @@ export default function FindCompany() {
             {data?.matchingEnabled && <>
               <Text style={styles.label}>CHOOSE A CONVERSATION TOPIC</Text>
               <Text style={styles.muted}>You’ll meet only someone who chose the same topic. Searches last up to two minutes.</Text>
-              {matchTopics.map((choice) => <View key={choice.id} style={styles.card}>
-                <Text style={{ fontWeight: "700" }}>{choice.label}</Text>
-                <Text style={styles.muted}>{choice.description}</Text>
-                <Button label={topic === choice.id ? `Selected: ${choice.label}` : `Choose ${choice.label}`}
-                  secondary={topic !== choice.id} onPress={() => setTopic(choice.id)} />
-              </View>)}
+              <View accessibilityRole="radiogroup" accessibilityLabel="Conversation topic" style={{ gap: 8 }}>
+                {matchTopics.map((choice) => <Pressable key={choice.id}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: topic === choice.id }}
+                  accessibilityLabel={choice.label}
+                  accessibilityHint={choice.description}
+                  onPress={() => setTopic(choice.id)}
+                  style={{ minHeight: 56, padding: 12, borderWidth: 1, borderRadius: 12,
+                    borderColor: topic === choice.id ? palette.purple : palette.line,
+                    backgroundColor: topic === choice.id ? "#251D38" : palette.card,
+                    flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <Text style={{ color: topic === choice.id ? "#B99AFF" : palette.muted }}>
+                    {topic === choice.id ? "◉" : "○"}
+                  </Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontWeight: "700" }}>{choice.label}</Text>
+                    <Text style={styles.caption}>{choice.description}</Text>
+                  </View>
+                </Pressable>)}
+              </View>
             </>}
             <Button
               label={data?.matchingEnabled ? `Find someone · ${topicLabel(topic)}` : "Check availability"}

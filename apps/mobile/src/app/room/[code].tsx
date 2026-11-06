@@ -33,6 +33,7 @@ import {
 import { RoomShare } from "../../components/room-share";
 import { RoomSession } from "../../rooms/room-session";
 import { roomActivities } from "../../rooms/activities";
+import { insertStarter } from "../../rooms/insert-starter";
 import { socketTransport } from "../../messaging/transport";
 import { firstMessagePart, validText } from "../../messaging/history";
 import { avatar, vibeLabel } from "../../rooms/vibes";
@@ -89,6 +90,7 @@ function RoomScreen({ code }: { code: string }) {
   );
   const [now, setNow] = useState(() => Date.now());
   const refreshedExpiredPulse = useRef<string | null>(null);
+  const lastCatalogAttempt = useRef(0);
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const input = useRef<TextInput>(null);
@@ -111,6 +113,7 @@ function RoomScreen({ code }: { code: string }) {
   const [modal, setModal] = useState<"members" | "playground" | "leave" | "report" | "participant" | "block" | "blockDone" | null>(
     null,
   );
+  const [playgroundTab, setPlaygroundTab] = useState<"today" | "activities" | "pulses">("today");
   const [selected, setSelected] = useState<Message | null>(null);
   const [selectedParticipant, setSelectedParticipant] = useState<{ participantId: string; ghostName: string } | null>(null);
   const [reason, setReason] = useState<ReportReason>("SPAM");
@@ -140,6 +143,15 @@ function RoomScreen({ code }: { code: string }) {
       const timer = setInterval(() => {
         const time = Date.now();
         setNow(time);
+        const utcDay = new Date(time).toISOString().slice(0, 10);
+        if (
+          controller.state.playground &&
+          controller.state.playground.date !== utcDay &&
+          time - lastCatalogAttempt.current >= 60_000
+        ) {
+          lastCatalogAttempt.current = time;
+          void controller.refreshPlayground();
+        }
         const latestPulse = controller.state.pulses[0];
         if (
           latestPulse &&
@@ -207,6 +219,10 @@ function RoomScreen({ code }: { code: string }) {
       setDraft((current) => text + current);
       if (replyTo) setReplyTo(replyTo);
     }
+  }
+  function chooseStarter(starter: string) {
+    setDraft((current) => insertStarter(current, starter));
+    setModal(null);
   }
   function backToRooms() {
     if (router.canGoBack()) router.back();
@@ -663,7 +679,11 @@ function RoomScreen({ code }: { code: string }) {
           )}
           {!keyboardVisible && ready && <Button
             label={state.pulses[0] && Date.parse(state.pulses[0].expiresAt) > now ? "Playground · Pulse live" : "Open Playground"}
-            secondary onPress={() => { setModal("playground"); void controller.refreshPlayground(); }}
+            secondary onPress={() => {
+              setPlaygroundTab(state.pulses[0] && Date.parse(state.pulses[0].expiresAt) > now ? "pulses" : "today");
+              setModal("playground");
+              void controller.refreshPlayground();
+            }}
           />}
           <View style={[styles.row, { alignItems: "flex-end" }]}>
             <TextInput
@@ -733,24 +753,44 @@ function RoomScreen({ code }: { code: string }) {
           <View style={styles.modal}>
             <View style={styles.modalCard}>
               {modal === "playground" && <>
-                <Text style={styles.title}>Playground</Text>
-                <ScrollView contentContainerStyle={{ gap: 12 }} style={{ maxHeight: 450 }}>
+                <Text style={[styles.title, { fontSize: 24 }]}>Playground</Text>
+                <View accessibilityRole="tablist" style={[styles.row, { flexWrap: "wrap" }]}>
+                  {(["today", "activities", "pulses"] as const).map((tab) => <Pressable
+                    key={tab}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: playgroundTab === tab }}
+                    onPress={() => setPlaygroundTab(tab)}
+                    style={[styles.pill, { minHeight: 44, justifyContent: "center", backgroundColor: playgroundTab === tab ? palette.purple : palette.raised }]}
+                  ><Text>{tab === "today" ? "Today" : tab === "activities" ? "Activities" : "Pulses"}</Text></Pressable>)}
+                </View>
+                <ScrollView contentContainerStyle={{ gap: 12 }} style={{ maxHeight: 400, flexShrink: 1 }}>
+                  {state.pulseError && <Banner>{friendlyError(state.pulseError, now)}</Banner>}
+                  {playgroundTab === "today" && <>
+                  {!state.playground && !state.pulseError && <Text style={styles.muted}>Loading today&apos;s ideas…</Text>}
                   {state.playground && <View style={styles.card}>
                     <Text style={styles.label}>TODAY&apos;S QUESTION</Text>
                     <Text>{state.playground.topic}</Text>
-                    <Button label="Use this question" secondary onPress={() => { setDraft(state.playground!.topic); setModal(null); }} />
+                    <Button label="Add question to chat" secondary onPress={() => chooseStarter(state.playground!.topic)} />
                   </View>}
-                  {state.pulseError && <Banner>{friendlyError(state.pulseError, now)}</Banner>}
+                  {state.playground && <View style={styles.card}>
+                    <Text style={styles.label}>TODAY&apos;S STORY · ONE SENTENCE EACH</Text>
+                    <Text>{state.playground.story}</Text>
+                    <Button label="Start this story together" secondary onPress={() => chooseStarter(`Story relay: one sentence each. ${state.playground!.story}`)} />
+                  </View>}
                   <Text style={styles.label}>QUICK PROMPTS</Text>
                   {state.playground?.prompts.map((prompt) => <Button key={prompt} label={prompt} secondary
-                    onPress={() => { setDraft(prompt); setModal(null); }} />)}
-                  <Text style={styles.label}>PLAY TOGETHER</Text>
+                    onPress={() => chooseStarter(prompt)} />)}
+                  </>}
+                  {playgroundTab === "activities" && <>
+                  <Text style={styles.muted}>Pick a simple activity. Its starter goes into chat for you to edit before sending.</Text>
                   {roomActivities.map((activity) => <View key={activity.id} style={styles.card}>
                     <Text style={{ fontWeight: "700" }}>{activity.title}</Text>
                     <Text style={styles.muted}>{activity.description}</Text>
                     <Button label="Put starter in chat" secondary
-                      onPress={() => { setDraft(activity.starter); setModal(null); }} />
+                      onPress={() => chooseStarter(activity.starter)} />
                   </View>)}
+                  </>}
+                  {playgroundTab === "pulses" && <>
                   <Text style={styles.label}>PULSE · CHOOSE TOGETHER</Text>
                   {state.pulses[0] && <View style={styles.card}>
                     <Text style={{ fontWeight: "700" }}>{state.pulses[0].question}</Text>
@@ -769,6 +809,7 @@ function RoomScreen({ code }: { code: string }) {
                     <Button key={choice.id} label={`${choice.question} ${choice.optionA} or ${choice.optionB}`}
                       secondary busy={state.pulseWorking} disabled={now < state.pulseRetryAt}
                       onPress={() => void controller.startPulse(choice.id)} />)}
+                  </>}
                 </ScrollView>
               </>}
               {modal === "members" && (
@@ -972,7 +1013,7 @@ function RoomScreen({ code }: { code: string }) {
                 </>
               )}
               <Button
-                label={modal === "members" ? "Back to conversation" : modal === "blockDone" ? "Back to My Rooms" : "Cancel"}
+                label={modal === "members" || modal === "playground" ? "Back to conversation" : modal === "blockDone" ? "Back to My Rooms" : "Cancel"}
                 secondary
                 disabled={working}
                 onPress={() => {

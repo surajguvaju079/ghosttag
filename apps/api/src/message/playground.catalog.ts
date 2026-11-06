@@ -15,6 +15,23 @@ export const dailyTopics = [
   'What is one thing you are looking forward to?',
 ] as const;
 
+export const dailyStories = [
+  'A paper boat appeared at the door with a map drawn inside.',
+  'The old clock skipped one minute, and everyone noticed something different.',
+  'A tiny garden grew overnight on the roof of the bus stop.',
+  'The library returned a book that nobody remembered borrowing.',
+  'A friendly note was tucked into the pocket of a borrowed coat.',
+  'The last train carried one suitcase with no name on it.',
+  'A street musician played a tune that made the rain pause.',
+  'Someone found a key with a handwritten invitation attached.',
+  'The lights in the empty café turned on just before sunrise.',
+  'A postcard arrived from a place that did not appear on any map.',
+  'The town agreed to leave one door open for a mystery guest.',
+  'A lost umbrella led its new owner to an unexpected celebration.',
+  'The first page of the notebook already knew today’s date.',
+  'At sunset, the bridge displayed a message meant for strangers.',
+] as const;
+
 export const conversationPrompts = [
   'Tell me about a small win from this week.',
   'What is a harmless opinion you feel strongly about?',
@@ -78,10 +95,16 @@ export const pulseChoices = [
 export function todayCatalog(now = new Date()) {
   const date = now.toISOString().slice(0, 10);
   const day = Math.floor(Date.parse(`${date}T00:00:00.000Z`) / 86_400_000);
+  const rotated = <T>(items: readonly T[], count: number) =>
+    Array.from(
+      { length: count },
+      (_, index) => items[(day + index) % items.length],
+    );
   return {
     date,
     topic: dailyTopics[day % dailyTopics.length],
-    prompts: conversationPrompts,
-    pulses: pulseChoices,
+    story: dailyStories[day % dailyStories.length],
+    prompts: rotated(conversationPrompts, 3),
+    pulses: rotated(pulseChoices, 3),
   };
 }

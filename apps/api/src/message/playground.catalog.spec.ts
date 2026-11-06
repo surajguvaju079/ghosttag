@@ -1,4 +1,9 @@
-import { todayCatalog, dailyTopics, pulseChoices } from './playground.catalog';
+import {
+  todayCatalog,
+  dailyTopics,
+  dailyStories,
+  pulseChoices,
+} from './playground.catalog';
 
 describe('curated playground catalog', () => {
   it('uses the same UTC date and topic across time zones', () => {
@@ -6,10 +11,22 @@ describe('curated playground catalog', () => {
     const later = todayCatalog(new Date('2026-11-03T23:59:59Z'));
     expect(before.date).toBe('2026-11-03');
     expect(before.topic).toBe(later.topic);
+    expect(before.story).toBe(later.story);
+    expect(before.prompts).toEqual(later.prompts);
+    expect(before.pulses).toEqual(later.pulses);
     expect(todayCatalog(new Date('2026-11-04T00:00:00Z')).date).toBe(
       '2026-11-04',
     );
     expect(dailyTopics).toHaveLength(14);
+    expect(dailyStories).toHaveLength(14);
+    expect(before.prompts).toHaveLength(3);
+    expect(before.pulses).toHaveLength(3);
+    expect(todayCatalog(new Date('2026-11-04T00:00:00Z')).story).not.toBe(
+      before.story,
+    );
+    expect(todayCatalog(new Date('2026-11-04T00:00:00Z')).pulses).not.toEqual(
+      before.pulses,
+    );
     expect(new Set(pulseChoices.map((choice) => choice.id)).size).toBe(
       pulseChoices.length,
     );

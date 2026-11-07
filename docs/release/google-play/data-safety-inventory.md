@@ -9,11 +9,13 @@ Room TTL alone is not a basis to declare all processing ephemeral or no data col
 | Anonymous identity/credential                                 | Internal UUID + hash; token in SecureStore, not app logs          | Authentication, security; assess User IDs category, deletion remains missing                             |
 | Ghost name/avatar/participant ID                              | Room-scoped; stable during leave/rejoin                           | Social functionality; visible to room participants                                                       |
 | Text messages and room names                                  | PostgreSQL persists, APIs and sockets deliver                     | App functionality; likely other in-app messages and/or other UGC classification; verify Console taxonomy |
+| Short original-voice recordings                               | User records on device; authenticated upload stores bytes in PostgreSQL until room cleanup | Social functionality and abuse review; assess audio/voice and UGC categories, recipients, backups and deletion |
 | Room/membership activity, timestamps, retry keys              | Server rows                                                       | Functionality, ordering, anti-duplication; inspect app-activity declarations                             |
 | Abuse reports/reporter membership                             | Private DB reason/reference/time                                  | Safety, investigation; privileged access, cascade retention                                              |
 | Peer network information                                      | Limiter uses per-process keyed hashes; proxy may see raw IP       | Security/abuse prevention; deployment logging/location inference needs audit                             |
 | Operational diagnostics                                       | API route/status/duration/request UUID                            | Operations; actual hosting/Expo/Google diagnostics and retention pending                                 |
-| Contacts, microphone, media, camera, precise location, ads ID | Not used by implemented text MVP; release permission blocks added | Verify final manifest and every SDK before declaring absent                                              |
+| Microphone permission                                         | Requested only after a native user taps Record                    | Required for short room voice messages; verify final manifest and Play disclosure                         |
+| Contacts, camera, other media, precise location, ads ID       | Not used by the current app; release permission blocks added      | Verify final manifest and every SDK before declaring absent                                              |
 
 No advertising, analytics or payment SDK is configured in the app code reviewed.
 This does not prove that no SDK/service processes diagnostics or device information.

@@ -14,8 +14,10 @@ import type {
   Members,
   ReportReason,
   RoomDetails,
+  SendResult,
   Vibe,
 } from "./contracts";
+import type { File } from "expo-file-system";
 import { assertProductionEndpoints } from "./release-policy";
 
 export class ApiError extends Error {
@@ -92,6 +94,9 @@ const messages: Record<string, string> = {
   AGE_INELIGIBLE: "GhostTag is not available to this anonymous identity.",
   SOCIAL_ACCESS_DISABLED: "GhostTag’s social features are not available yet.",
   INVALID_ROOM_CODE: "Enter a room code like GH-4829.",
+  INVALID_VOICE_PAYLOAD:
+    "This recording could not be sent. Record a new clip of 10 seconds or less.",
+  VOICE_TOO_LARGE: "This recording is too large. Record a shorter clip.",
   ROOM_NOT_FOUND: "This room could not be found. Check the code.",
   ROOM_EXPIRED: "This moment has ended. Create a new room to keep talking.",
   ROOM_LOCKED: "This room is temporarily locked. Try again later.",
@@ -314,6 +319,64 @@ export class ApiClient {
   }
   rooms(token: string) {
     return this.request<JoinedRooms>("/rooms", token);
+  }
+  async sendVoice(
+    token: string,
+    code: string,
+    clientMessageId: string,
+    durationMs: number,
+    file: File,
+  ): Promise<SendResult> {
+    if (!file.exists || file.size < 1 || file.size > 262_144)
+      throw new ApiError({
+        statusCode: 413,
+        code: "VOICE_TOO_LARGE",
+        message: "Voice clip exceeds 256 KB",
+      });
+    const { fetch: expoFetch } = await import("expo/fetch");
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), 30000);
+    try {
+      const response = await expoFetch(
+        `${this.baseUrl}/rooms/${normalizeCode(code)}/messages/voice`,
+        {
+          method: "POST",
+          signal: abort.signal,
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "audio/mp4",
+            "X-Client-Message-Id": clientMessageId,
+            "X-Voice-Duration-Ms": String(durationMs),
+          },
+          body: file,
+        },
+      );
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        if (response.status === 401) this.unauthorized(token);
+        const error = new ApiError({
+          statusCode: response.status,
+          code: data.code || "REQUEST_FAILED",
+          message: "Request failed",
+          retryAfterMs:
+            data.retryAfterMs ??
+            (Number(response.headers.get("Retry-After")) * 1000 || undefined),
+        });
+        if (ageAccessCodes.includes(error.failure.code))
+          this.accessDenied(token, error);
+        throw error;
+      }
+      return (await response.json()) as SendResult;
+    } catch (error) {
+      throw asApiError(error);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  voiceUrl(code: string, messageId: string) {
+    if (!/^m_[0-9a-f]{32}$/.test(messageId))
+      throw new Error("Invalid message ID");
+    return `${this.baseUrl}/rooms/${normalizeCode(code)}/messages/${messageId}/audio`;
   }
   discoverRooms(token: string, cursor?: string) {
     return this.request<DiscoverRooms>(

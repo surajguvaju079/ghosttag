@@ -259,9 +259,10 @@ The initial implementation does not support:
 Images
 Videos
 Files
-Voice messages
 
-Media may be introduced later through a separate architectural decision.
+Short voice messages are introduced by [decision 0008](../decisions/0008-room-voice-messages.md).
+Their bytes live in a `voice_clips` row tied to a message and cascade when that
+message is deleted. Other media types remain unsupported.
 
 Editing
 
@@ -527,7 +528,7 @@ Swap
 Notifications
 Device registration
 Analytics
-Media
+Other media (images, video, files)
 
 These will be designed separately before being added to the database schema.
 

@@ -9,6 +9,7 @@ export const messageInclude = {
   membership: true,
   replyTo: { include: { membership: true } },
   reactions: true,
+  voiceClip: { select: { durationMs: true, byteLength: true, sha256: true } },
 } as const;
 
 @Injectable()
@@ -65,6 +66,34 @@ export class MessageRepository {
   ) {
     return tx.message.create({
       data: { roomId, membershipId, text, clientMessageId, replyToId },
+      include: messageInclude,
+    });
+  }
+
+  createVoice(
+    tx: Prisma.TransactionClient,
+    roomId: string,
+    membershipId: string,
+    clientMessageId: string,
+    durationMs: number,
+    data: Buffer,
+    sha256: string,
+  ) {
+    return tx.message.create({
+      data: {
+        roomId,
+        membershipId,
+        clientMessageId,
+        text: 'Voice message',
+        voiceClip: {
+          create: {
+            durationMs,
+            byteLength: data.length,
+            sha256,
+            data: Uint8Array.from(data),
+          },
+        },
+      },
       include: messageInclude,
     });
   }

@@ -73,3 +73,23 @@ Expiration denies history immediately. After the default one-hour grace, bounded
 cleanup physically deletes expired content and ultimately its room. A purged room
 returns 404 rather than 410; grace and backlog never grant continued access.
 Operational settings are documented in `docs/operations/messaging-safety.md`.
+
+## Short voice messages
+
+`POST /api/v1/rooms/:code/messages/voice` requires the same bearer credential,
+social eligibility and ACTIVE room membership as text sending. Body is raw
+`audio/mp4`, at most 262,144 bytes, with `X-Client-Message-Id` (UUIDv4) and
+`X-Voice-Duration-Ms` (integer 1–10,000) headers. Success is 201 with the same
+`{message, replayed, clientMessageId}` shape as socket sends. Retries with the
+same key, bytes and duration replay the stored message; changed content conflicts.
+The dedicated `VOICE_SEND` and shared message burst limits apply. The server
+checks size and MP4 signature, but does not decode audio to verify duration.
+
+Voice message projections keep `text: "Voice message"` for older clients and
+add `voice: {durationMs}`. The existing message report endpoint accepts their
+public message IDs. The Socket.IO `message:created` event delivers metadata only.
+
+`GET /api/v1/rooms/:code/messages/:messageId/audio` returns `audio/mp4` with
+`Cache-Control: no-store` only while the caller remains an ACTIVE member of an
+accessible room. Unknown IDs and text messages return `MESSAGE_NOT_FOUND`.
+Room expiry immediately denies access; room cleanup cascades to clip bytes.

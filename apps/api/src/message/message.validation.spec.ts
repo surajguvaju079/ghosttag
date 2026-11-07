@@ -1,5 +1,10 @@
 import { randomUUID } from 'node:crypto';
-import { historyQuery, roomCode, sendPayload } from './message.validation';
+import {
+  historyQuery,
+  roomCode,
+  sendPayload,
+  voicePayload,
+} from './message.validation';
 
 describe('Messaging input contracts', () => {
   it('normalizes room codes', () =>
@@ -65,5 +70,20 @@ describe('Messaging input contracts', () => {
     { unknown: true },
   ])('rejects malformed pagination (%p)', (query) => {
     expect(() => historyQuery(query)).toThrow();
+  });
+  it('accepts only a bounded MP4 voice payload with a UUIDv4 retry key', () => {
+    const bytes = Buffer.from('0000ftypisom');
+    expect(
+      voicePayload('GH-1234', randomUUID(), '10000', 'audio/mp4', bytes),
+    ).toMatchObject({ code: 'GH-1234', durationMs: 10000, data: bytes });
+    for (const [duration, type, data] of [
+      ['10001', 'audio/mp4', bytes],
+      ['5000', 'audio/webm', bytes],
+      ['5000', 'audio/mp4', Buffer.alloc(262145)],
+      ['5000', 'audio/mp4', Buffer.from('not an mp4')],
+    ] as const)
+      expect(() =>
+        voicePayload('GH-1234', randomUUID(), duration, type, data),
+      ).toThrow();
   });
 });

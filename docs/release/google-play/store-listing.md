@@ -7,7 +7,7 @@ child suitability, automated moderation, or completed blocking/deletion is permi
 
 ## Short description
 
-Temporary rooms, room-scoped ghost identities, and real-time text chat.
+Temporary rooms, room-scoped ghost identities, and real-time chat.
 
 ## Full description
 
@@ -17,15 +17,16 @@ GhostTag gives you a ghost name and avatar inside each room. Create a room for d
 talk, chaos, a rant, or a gaming conversation, then invite others with its code.
 There are no public profiles, follower counts, or permanent social connections.
 
-Send text messages, see active participants, and catch up with message history if
+Send text or short voice messages, see active participants, and catch up with message history if
 you reconnect. Leave a room and rejoin while it remains available. Rooms close
 24 hours after creation; server cleanup happens afterward.
 
 You can report an objectionable message from the conversation. Avoid sharing
-personal or sensitive information: other participants can read and copy messages.
+personal or sensitive information: other participants can read, copy or record
+what you share. Your original voice may identify you.
 
-GhostTag currently focuses on temporary group text conversations. Polls, reactions,
-Echo, Ghost Swap and push notifications are not included in this first version.
+GhostTag focuses on temporary conversations. Voice recording requires microphone
+permission after you tap Record. Push notifications are not included in this version.
 
 ## Assets and captures
 

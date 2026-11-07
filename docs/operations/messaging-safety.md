@@ -39,7 +39,7 @@ For any enabled dimension, override these environment variables:
 * `SAFETY_<POLICY>_NETWORK_LIMIT`
 * `SAFETY_<POLICY>_WINDOW_MS`
 
-Policies: IDENTITY_CREATE, ROOM_CREATE, ROOM_JOIN, MESSAGE_SEND, MESSAGE_BURST,
+Policies: IDENTITY_CREATE, ROOM_CREATE, ROOM_JOIN, MESSAGE_SEND, VOICE_SEND, MESSAGE_BURST,
 WS_CONNECT, WS_SUBSCRIBE, MESSAGE_REPORT. IDENTITY_CREATE has only a network
 dimension; MESSAGE_BURST only an identity dimension. Variables for absent dimensions
 do not enable new dimensions. Enabled limits must be positive integers (zero does

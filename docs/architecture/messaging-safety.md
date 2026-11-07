@@ -17,6 +17,7 @@ live deployment. Restarts reset counters; multiple instances multiply allowances
 | ROOM_CREATE | 10 | 30 | 1 hour |
 | ROOM_JOIN | 30 | 120 | 1 minute |
 | MESSAGE_SEND | 30 | 120 | 1 minute |
+| VOICE_SEND | 6 | 24 | 1 minute |
 | MESSAGE_BURST | 5 | none | 1 second |
 | WS_CONNECT | 20 | 120 | 1 minute |
 | WS_SUBSCRIBE | 30 | 180 | 1 minute |

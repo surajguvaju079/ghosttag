@@ -224,7 +224,7 @@ export class MessageGateway
     return this.run(socket, async (state) => {
       this.rates.consume('MESSAGE_SEND', state.userId, state.network);
       const result = await this.messages.send(state.hash, value);
-      if (!result.replayed) await this.deliver(result.message);
+      if (!result.replayed) await this.notifyMessage(result.message);
       return result;
     });
   }
@@ -291,7 +291,7 @@ export class MessageGateway
     }
   }
 
-  private async deliver(
+  async notifyMessage(
     message: Awaited<ReturnType<MessageService['send']>>['message'],
   ) {
     await Promise.all(

@@ -28,6 +28,7 @@ interface PublicMessage {
   author: { participantId: string; ghostName: string; ghostAvatar: string };
   replyTo?: { messageId: string; text: string };
   reactions?: { type: string; count: number; mine: boolean }[];
+  voice?: { durationMs: number };
 }
 interface Reply<T> {
   ok: boolean;
@@ -308,6 +309,72 @@ describe('Real-time messaging + PostgreSQL', () => {
       owner.token,
     ])
       expect(publicJson).not.toContain(hidden);
+  });
+
+  it('stores one voice clip, broadcasts metadata, and serves audio only to active room members', async () => {
+    const receiver = await connect(member.token);
+    await subscribe(receiver);
+    const bytes = Buffer.from('0000ftypisom');
+    const key = randomUUID();
+    const upload = (token: string, data = bytes) =>
+      request(app.getHttpServer())
+        .post(`/api/v1/rooms/${code}/messages/voice`)
+        .auth(token, { type: 'bearer' })
+        .set('Content-Type', 'audio/mp4')
+        .set('X-Client-Message-Id', key)
+        .set('X-Voice-Duration-Ms', '2400')
+        .send(data);
+    const pushed = event<PublicMessage>(receiver, 'message:created');
+    const first = await upload(owner.token).expect(201);
+    const sent = first.body as SendData;
+    expect(first.body).toMatchObject({
+      replayed: false,
+      message: { code, text: 'Voice message', voice: { durationMs: 2400 } },
+    });
+    expect(await pushed).toEqual(sent.message);
+    const id = sent.message.messageId;
+    const path = `/api/v1/rooms/${code}/messages/${id}/audio`;
+    const clip = await request(app.getHttpServer())
+      .get(path)
+      .auth(member.token, { type: 'bearer' })
+      .expect(200);
+    expect(clip.headers['content-type']).toMatch(/^audio\/mp4/);
+    expect(clip.headers['cache-control']).toBe('no-store');
+    expect(clip.body).toEqual(bytes);
+    const replay = await upload(owner.token).expect(201);
+    expect(replay.body).toMatchObject({
+      replayed: true,
+      message: { messageId: id },
+    });
+    await upload(owner.token, Buffer.from('0000ftypdiff')).expect(409);
+    await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${code}/messages/${id}/reports`)
+      .auth(member.token, { type: 'bearer' })
+      .send({ reason: 'SPAM' })
+      .expect(202);
+    const outsider = await createEligibleIdentity();
+    await request(app.getHttpServer())
+      .get(path)
+      .auth(outsider.token, { type: 'bearer' })
+      .expect(403);
+    await rooms.leaveRoom(member.identityId, code);
+    await request(app.getHttpServer())
+      .get(path)
+      .auth(member.token, { type: 'bearer' })
+      .expect(403);
+    expect(
+      await prisma.voiceClip.count({ where: { message: { publicId: id } } }),
+    ).toBe(1);
+    await prisma.room.update({
+      where: { id: roomId },
+      data: { expiresAt: new Date(0) },
+    });
+    await request(app.getHttpServer())
+      .get(path)
+      .auth(owner.token, { type: 'bearer' })
+      .expect(410);
+    await prisma.message.delete({ where: { publicId: id } });
+    expect(await prisma.voiceClip.count()).toBe(0);
   });
 
   it('persists a same-room reply and rejects a cross-room target', async () => {

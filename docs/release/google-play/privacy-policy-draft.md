@@ -15,7 +15,8 @@ revocation timestamps; current creation sets neither automatic expiry nor deleti
 No email/phone/password login is requested by this MVP.
 
 Room membership stores room-specific ghost name/avatar, role, timestamps and status.
-The backend stores room details, text messages, idempotency keys and private abuse
+The backend stores room details, text messages, short original-voice recordings,
+idempotency keys and private abuse
 reports. Room/message public identifiers do not expose internal user UUIDs. Some
 legacy identity/create-room API responses still contain internal IDs; mobile drops
 them. This is technical debt, not a promise that no internal ID is ever transmitted.
@@ -23,7 +24,11 @@ them. This is technical debt, not a promise that no internal ID is ever transmit
 Recipients in a room receive its messages and participant information. Reports are
 not broadcast. Credential hashes, internal identity links and report metadata are
 accessible to authorized infrastructure operators, not ordinary room participants.
-This app is not end-to-end encrypted. Other users can copy content.
+This app is not end-to-end encrypted. Other users can copy content or record
+voice playback. The microphone is requested only after a user taps Record;
+recordings are previewed locally before an explicit send. Sent voice clips are
+stored in PostgreSQL and follow room content cleanup, subject to backup and
+operational retention review.
 
 ## Age screening
 

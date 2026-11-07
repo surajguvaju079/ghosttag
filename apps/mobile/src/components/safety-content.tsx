@@ -48,6 +48,16 @@ export default function Safety({
           </Text>
         </View>
         <View style={styles.card}>
+          <Text style={styles.label}>VOICE MESSAGES</Text>
+          <Text>
+            A voice message uses your original voice. Other people in the room
+            may recognize or record it. Preview before sending, and share only
+            if you are comfortable. Voice clips become inaccessible when the
+            room expires; server cleanup deletes them afterward and can be
+            delayed.
+          </Text>
+        </View>
+        <View style={styles.card}>
           <Text style={styles.label}>CHILD SAFETY</Text>
           <Text>
             Child sexual abuse and exploitation (CSAE), child sexual abuse

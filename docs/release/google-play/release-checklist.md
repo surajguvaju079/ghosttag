@@ -20,8 +20,10 @@ No build, upload, account access, signing change, or deployment was performed.
   API must end in /api/v1; optional socket URL is an HTTPS origin, yielding WSS.
   Public-looking DNS can still resolve privately: independently check DNS, TLS,
   ownership and reachability from external networks. No production domain is known.
-- Production blocks overlay and text-MVP-unneeded microphone, camera, media/storage,
+- Production blocks overlay, camera, media/storage,
   location, contacts, notifications, vibration and advertising-ID permissions.
+  The voice-message release permits microphone recording only after an explicit tap;
+  verify the microphone declaration and permission copy in the final native build.
   Backup is disabled. Inspect the final merged release manifest/native artifact;
   Expo config introspection alone does not inspect every transitive library.
 - SDK 57 defaults to target/compile SDK 36; verify actual AAB target SDK, 16KB page

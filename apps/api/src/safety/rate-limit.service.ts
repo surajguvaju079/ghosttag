@@ -12,6 +12,7 @@ export const defaultPolicies = {
   ROOM_CREATE: { network: 30, identity: 10, windowMs: 3_600_000 },
   ROOM_JOIN: { network: 120, identity: 30, windowMs: 60_000 },
   MESSAGE_SEND: { network: 120, identity: 30, windowMs: 60_000 },
+  VOICE_SEND: { network: 24, identity: 6, windowMs: 60_000 },
   MESSAGE_BURST: { network: 0, identity: 5, windowMs: 1000 },
   WS_CONNECT: { network: 120, identity: 20, windowMs: 60_000 },
   WS_SUBSCRIBE: { network: 180, identity: 30, windowMs: 60_000 },

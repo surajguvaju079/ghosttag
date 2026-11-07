@@ -189,6 +189,21 @@ Home and Discover also preview the shared daily story. The room Playground group
 Today, Activities and Pulses; choosing text appends it to the unsent draft. Matched
 rooms show the temporary session's chosen topic, including after app restart.
 
+The Home join form can paste a validated room code after an explicit tap. Discover
+can filter the rooms already loaded by vibe; this does not change the server's
+discovery order or cursor, and more pages remain available through Show more rooms.
+
+## Short room voice messages
+
+Native Android and iOS rooms offer an explicit ten-second recording flow with a
+visible warning that the original voice may identify the speaker. Recording is
+previewed locally and sent only after a second tap. Discard, room exit and app
+backgrounding stop recording and remove the local cache file. A failed upload
+keeps its local file and retry key while the room remains open, so retrying cannot
+create a second voice message. Playback requests use the same bearer credential
+and room access checks as history. Browser preview shows a fallback label instead
+of recording or playback. See [decision 0008](../decisions/0008-room-voice-messages.md).
+
 ## App-wide age eligibility
 
 Session bootstrap and foreground validation now use the additive identity-status

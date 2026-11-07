@@ -90,6 +90,17 @@ test("Expo production config fails closed and preserves owner/linkage/branding",
     assert.deepEqual(result.android.adaptiveIcon, base.android.adaptiveIcon);
     assert.deepEqual(result.plugins, base.plugins);
     assert.ok(
+      !result.android.blockedPermissions.includes(
+        "android.permission.RECORD_AUDIO",
+      ),
+    );
+    assert.ok(
+      result.plugins.some(
+        (plugin: unknown) =>
+          Array.isArray(plugin) && plugin[0] === "expo-audio",
+      ),
+    );
+    assert.ok(
       result.android.blockedPermissions.includes(
         "android.permission.SYSTEM_ALERT_WINDOW",
       ),

@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { Prisma, Room, RoomMembership } from 'generated/prisma/client';
+import { createHash } from 'node:crypto';
 import {
   IdentityCredentialService,
   VerifiedCredential,
@@ -19,6 +20,7 @@ import {
   reactionTypes,
   roomCode,
   sendPayload,
+  voicePayload,
 } from './message.validation';
 
 type StoredMessage = Prisma.MessageGetPayload<{
@@ -85,7 +87,8 @@ export class MessageService {
         );
         if (
           previous &&
-          (previous.text !== input.text ||
+          (previous.voiceClip ||
+            previous.text !== input.text ||
             previous.replyTo?.publicId !== input.replyToMessageId)
         ) {
           throw new ConflictException({
@@ -127,6 +130,81 @@ export class MessageService {
       },
       true,
     );
+  }
+
+  async sendVoice(
+    hash: string,
+    code: unknown,
+    key: unknown,
+    duration: unknown,
+    contentType: unknown,
+    data: Buffer,
+  ) {
+    const input = voicePayload(code, key, duration, contentType, data);
+    const sha256 = createHash('sha256').update(input.data).digest('hex');
+    return this.access(
+      hash,
+      input.code,
+      async ({ tx, room, membership, credential }) => {
+        const previous = await this.repository.findRetry(
+          tx,
+          membership.id,
+          input.clientMessageId,
+        );
+        if (
+          previous &&
+          (!previous.voiceClip ||
+            previous.voiceClip.sha256 !== sha256 ||
+            previous.voiceClip.durationMs !== input.durationMs)
+        )
+          throw new ConflictException({
+            code: 'IDEMPOTENCY_CONFLICT',
+            message: 'Retry key was already used with different audio',
+          });
+        this.assertLive({ room, credential });
+        if (!previous) this.rates.consume('MESSAGE_BURST', credential.userId);
+        const stored =
+          previous ??
+          (await this.repository.createVoice(
+            tx,
+            room.id,
+            membership.id,
+            input.clientMessageId,
+            input.durationMs,
+            input.data,
+            sha256,
+          ));
+        this.assertLive({ room, credential });
+        return {
+          message: this.publicMessage(stored, room.code, membership.id),
+          replayed: !!previous,
+          clientMessageId: input.clientMessageId,
+        };
+      },
+      true,
+    );
+  }
+
+  audio(hash: string, code: string, messageId: string) {
+    if (!/^m_[0-9a-f]{32}$/.test(messageId))
+      throw new NotFoundException({
+        code: 'MESSAGE_NOT_FOUND',
+        message: 'Message not found',
+      });
+    return this.access(hash, code, async ({ tx, room, credential }) => {
+      const message = await this.repository.findPublic(tx, room.id, messageId);
+      if (!message?.voiceClip)
+        throw new NotFoundException({
+          code: 'MESSAGE_NOT_FOUND',
+          message: 'Message not found',
+        });
+      const clip = await tx.voiceClip.findUniqueOrThrow({
+        where: { messageId: message.id },
+        select: { data: true },
+      });
+      this.assertLive({ room, credential });
+      return Buffer.from(clip.data);
+    });
   }
 
   delivery<T>(
@@ -184,6 +262,9 @@ export class MessageService {
       messageId: message.publicId,
       code,
       text: message.text,
+      ...(message.voiceClip
+        ? { voice: { durationMs: message.voiceClip.durationMs } }
+        : {}),
       createdAt: message.createdAt.toISOString(),
       author: {
         participantId: message.membership.publicId,

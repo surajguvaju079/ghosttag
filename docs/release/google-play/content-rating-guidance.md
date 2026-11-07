@@ -4,9 +4,10 @@ Suggested category: Social. Complete the actual IARC questionnaire in Play Conso
 truthfully; do not invent an Everyone/Teen/Mature rating or equate a product age
 threshold with the assigned content rating. Record questionnaire date and results.
 
-Describe real-time user interaction, anonymous room-scoped identities, text UGC,
+Describe real-time user interaction, anonymous room-scoped identities, text and
+short voice UGC,
 message reporting, lack of automatic filtering, absence of implemented blocking,
-and actual moderation coverage. Text-only chat can still contain sexual language,
+and actual moderation coverage. Voice and text chat can contain sexual language,
 threats or hateful content. No images/video are uploaded by this MVP, and no paid
 purchases, gambling, public profiles or location-sharing feature is implemented.
 

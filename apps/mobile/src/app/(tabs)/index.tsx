@@ -12,11 +12,17 @@ import {
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Clipboard from "expo-clipboard";
 import { brand, BrandMark, BrandScreen } from "../../ui/brand";
 import { useRouter } from "expo-router";
 import { useSession } from "../../auth/provider";
 import { browserPreview } from "../../auth/credential-store";
-import { ApiError, asApiError, friendlyError } from "../../api/client";
+import {
+  ApiError,
+  asApiError,
+  friendlyError,
+  normalizeCode,
+} from "../../api/client";
 import type { Vibe } from "../../api/contracts";
 import { vibes } from "../../rooms/vibes";
 import { Banner, Text } from "../../ui/primitives";
@@ -30,7 +36,20 @@ export default function Home() {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
+  const [pasteError, setPasteError] = useState("");
   const [retryAt, setRetryAt] = useState({ create: 0, join: 0 });
+  async function pasteCode() {
+    setPasteError("");
+    try {
+      setCode(normalizeCode(await Clipboard.getStringAsync()));
+      setError(undefined);
+      setPasteError("");
+    } catch (failure) {
+      if (failure instanceof ApiError) setError(failure);
+      else
+        setPasteError("Couldn’t read the clipboard. Enter the code manually.");
+    }
+  }
   async function enter() {
     if (busy) return;
     if (Date.now() < retryAt[mode]) {
@@ -110,6 +129,10 @@ export default function Home() {
                       onPress={() => setVibe(item.value)}
                       style={({ pressed }) => [
                         home.vibe,
+                        vibe === item.value && {
+                          backgroundColor: `${item.color}16`,
+                          borderColor: `${item.color}70`,
+                        },
                         pressed && { opacity: 0.7 },
                       ]}
                     >
@@ -162,30 +185,55 @@ export default function Home() {
                   accessibilityState={{ checked: discoverable }}
                   accessibilityLabel="List room in Discover"
                   onPress={() => setDiscoverable((value) => !value)}
-                  style={{ minHeight: 48, justifyContent: "center" }}
+                  style={home.discoveryRow}
                 >
-                  <Text style={home.note}>
-                    {discoverable ? "☑" : "☐"} List this room in Discover
-                  </Text>
-                  <Text style={home.note}>
-                    Anyone eligible can find and join it. You can hide it later.
-                  </Text>
+                  <View style={{ flex: 1, gap: 3 }}>
+                    <Text style={home.discoveryTitle}>List in Discover</Text>
+                    <Text style={home.note}>
+                      Eligible people can find this room. Hide it later if you
+                      like.
+                    </Text>
+                  </View>
+                  <View
+                    style={[home.switchTrack, discoverable && home.switchTrackOn]}
+                  >
+                    <View
+                      style={[home.switchThumb, discoverable && home.switchThumbOn]}
+                    />
+                  </View>
                 </Pressable>
               </>
             ) : (
               <>
-                <TextInput
-                  accessibilityLabel="Room code"
-                  placeholder="GH-4829"
-                  placeholderTextColor={brand.muted}
-                  style={[home.input, home.code]}
-                  value={code}
-                  onChangeText={setCode}
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                  maxLength={12}
-                  onSubmitEditing={() => void enter()}
-                />
+                <View style={home.codeRow}>
+                  <TextInput
+                    accessibilityLabel="Room code"
+                    placeholder="GH-4829"
+                    placeholderTextColor={brand.muted}
+                    style={[home.input, home.code]}
+                    value={code}
+                    onChangeText={(value) => {
+                      setCode(value);
+                      setError(undefined);
+                      setPasteError("");
+                    }}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    maxLength={12}
+                    onSubmitEditing={() => void enter()}
+                  />
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Paste room code"
+                    onPress={() => void pasteCode()}
+                    style={({ pressed }) => [
+                      home.paste,
+                      pressed && { opacity: 0.7 },
+                    ]}
+                  >
+                    <Text style={home.pasteText}>Paste</Text>
+                  </Pressable>
+                </View>
                 <Text style={home.note}>
                   Enter the code your friend shared. You can rejoin a room you
                   left while it’s still open.
@@ -193,6 +241,7 @@ export default function Home() {
               </>
             )}
             {error !== undefined && <Banner>{friendlyError(error)}</Banner>}
+            {!!pasteError && <Banner>{pasteError}</Banner>}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={
@@ -236,6 +285,7 @@ export default function Home() {
             onPress={() => {
               setMode(mode === "create" ? "join" : "create");
               setError(undefined);
+              setPasteError("");
             }}
             style={({ pressed }) => [
               home.alternative,
@@ -313,6 +363,9 @@ const home = StyleSheet.create({
     gap: 8,
     minHeight: 84,
     paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: "transparent",
+    borderRadius: 16,
   },
   vibeOrb: {
     width: 49,
@@ -354,7 +407,48 @@ const home = StyleSheet.create({
     minHeight: 50,
     fontSize: 14,
   },
-  code: { fontSize: 26, letterSpacing: 4, textAlign: "center", minHeight: 64 },
+  codeRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  code: {
+    flex: 1,
+    fontSize: 20,
+    letterSpacing: 2,
+    textAlign: "center",
+    minHeight: 58,
+  },
+  paste: {
+    minHeight: 58,
+    minWidth: 66,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: brand.border,
+    backgroundColor: "#2A1C49",
+  },
+  pasteText: { color: "#E3D5FF", fontSize: 13, fontWeight: "700" },
+  discoveryRow: {
+    minHeight: 66,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: brand.border,
+    backgroundColor: "#FFFFFF08",
+  },
+  discoveryTitle: { color: "#F9F5FF", fontSize: 13, fontWeight: "700" },
+  switchTrack: {
+    width: 42,
+    height: 26,
+    borderRadius: 13,
+    padding: 3,
+    backgroundColor: "#55476C",
+    justifyContent: "center",
+  },
+  switchTrackOn: { backgroundColor: brand.purple },
+  switchThumb: { width: 20, height: 20, borderRadius: 10, backgroundColor: "#FFFFFF" },
+  switchThumbOn: { alignSelf: "flex-end" },
   note: { fontSize: 11, lineHeight: 18, color: brand.muted },
   primary: {
     borderRadius: 20,

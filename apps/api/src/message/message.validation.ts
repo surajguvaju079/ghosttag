@@ -77,6 +77,37 @@ export function sendPayload(value: unknown) {
   };
 }
 
+export function voicePayload(
+  codeValue: unknown,
+  keyValue: unknown,
+  durationValue: unknown,
+  contentType: unknown,
+  data: Buffer,
+) {
+  const code = roomCode(codeValue);
+  if (
+    typeof keyValue !== 'string' ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      keyValue,
+    ) ||
+    typeof durationValue !== 'string' ||
+    !/^\d{1,5}$/.test(durationValue) ||
+    Number(durationValue) < 1 ||
+    Number(durationValue) > 10_000 ||
+    contentType !== 'audio/mp4' ||
+    data.length < 12 ||
+    data.length > 262_144 ||
+    data.toString('ascii', 4, 8) !== 'ftyp'
+  )
+    invalid('INVALID_VOICE_PAYLOAD', 'Invalid voice message');
+  return {
+    code,
+    clientMessageId: keyValue.toLowerCase(),
+    durationMs: Number(durationValue),
+    data,
+  };
+}
+
 export function reactionPayload(value: unknown) {
   const object = payload(value, ['code', 'messageId', 'type']);
   const code = roomCode(object.code);

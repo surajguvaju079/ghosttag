@@ -31,6 +31,7 @@ import {
   type ReportReason,
 } from "../../api/contracts";
 import { RoomShare } from "../../components/room-share";
+import { VoiceBubble, VoiceComposer } from "../../components/voice-message";
 import { RoomSession } from "../../rooms/room-session";
 import { roomActivities } from "../../rooms/activities";
 import { insertStarter } from "../../rooms/insert-starter";
@@ -478,9 +479,19 @@ function RoomScreen({ code }: { code: string }) {
                       </Text>
                     </View>
                   )}
-                  <Text selectable style={{ lineHeight: 23 }}>
-                    {item.text}
-                  </Text>
+                  {item.voice ? (
+                    <VoiceBubble
+                      api={api}
+                      token={token}
+                      code={code}
+                      message={item}
+                      ready={ready}
+                    />
+                  ) : (
+                    <Text selectable style={{ lineHeight: 23 }}>
+                      {item.text}
+                    </Text>
+                  )}
                 </View>
                 <ScrollView
                   horizontal
@@ -726,6 +737,19 @@ function RoomScreen({ code }: { code: string }) {
               onPress={() => void send()}
             />
           </View>
+          {!keyboardVisible && ready && (
+            <VoiceComposer
+              api={api}
+              token={token}
+              code={code}
+              ready={ready && !sendRateLimited}
+              onSent={(message) => {
+                controller.acceptVoice(message);
+                setNearLatest(true);
+                list.current?.scrollToOffset({ offset: 0, animated: true });
+              }}
+            />
+          )}
           {draft.length > 2000 && (
             <Text style={styles.caption}>
               Long paste: send the first part, then send what remains.

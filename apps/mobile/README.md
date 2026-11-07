@@ -72,6 +72,14 @@ errors, pagination/recovery, deduplication, stable retry keys, and reports.
 
 ## Manual device checklist
 
+For voice messages, build a native binary containing `expo-audio`, then verify
+microphone permission on first tap, the original-voice warning, ten-second stop,
+local preview/discard, send/retry after an uncertain response, playback by another
+active member, and denial after leave or room expiry. Confirm recordings stop and
+local previews are discarded when the app backgrounds. Browser preview does not
+record or play clips. The integration test uses a synthetic MP4 header and does not
+replace listening tests on real Android and iOS devices.
+
 Use two clients with independent credentials against a confirmed local backend.
 Create and join a room, compare the roster, send messages in both directions,
 background one client, send over 50 messages, foreground and inspect recovered

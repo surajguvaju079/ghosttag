@@ -600,6 +600,16 @@ export class RoomSession {
     }
     return true;
   }
+  acceptVoice(message: Message) {
+    if (
+      this.active &&
+      this.state.status === "ready" &&
+      !this.expired() &&
+      message.code === this.code &&
+      message.voice
+    )
+      this.patch({ messages: mergeLive(this.state.messages, message) });
+  }
   async refreshMembers() {
     const epoch = this.epoch;
     try {

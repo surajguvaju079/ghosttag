@@ -27,6 +27,7 @@ export type Message = {
   messageId: string;
   code: string;
   text: string;
+  voice?: { durationMs: number };
   createdAt: string;
   author: { participantId: string; ghostName: string; ghostAvatar: string };
   replyTo?: {

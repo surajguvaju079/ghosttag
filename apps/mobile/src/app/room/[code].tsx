@@ -97,6 +97,8 @@ function RoomScreen({ code }: { code: string }) {
   const input = useRef<TextInput>(null);
   const [inputHeight, setInputHeight] = useState(52);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [voiceExpanded, setVoiceExpanded] = useState(false);
+  const [voiceNotice, setVoiceNotice] = useState("");
   useEffect(() => {
     const show = Keyboard.addListener(
       Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
@@ -716,7 +718,7 @@ function RoomScreen({ code }: { code: string }) {
                 ready ? "Say something real…" : "Waiting for your room…"
               }
               placeholderTextColor={palette.muted}
-              editable={ready}
+              editable={ready && !voiceExpanded}
               multiline
               style={[
                 styles.input,
@@ -726,29 +728,48 @@ function RoomScreen({ code }: { code: string }) {
                   maxHeight: 130,
                   minHeight: 52,
                   paddingTop: 15,
+                  display: voiceExpanded ? "none" : "flex",
                 },
               ]}
             />
-            <Button
-              label={draft.length > 2000 ? "Send first part ↑" : "Send ↑"}
-              disabled={
-                !ready || !validText(firstMessagePart(draft)) || sendRateLimited
-              }
-              onPress={() => void send()}
-            />
-          </View>
-          {!keyboardVisible && ready && (
+            {state.details && state.status !== "expired" && state.status !== "blocked" && (
             <VoiceComposer
               api={api}
               token={token}
               code={code}
               ready={ready && !sendRateLimited}
+              expanded={voiceExpanded}
+              onExpandedChange={(expanded) => {
+                setVoiceExpanded(expanded);
+                if (expanded) input.current?.blur();
+              }}
+              onNotice={setVoiceNotice}
+              disabledLabel={
+                sendRateLimited
+                  ? "Voice paused · send cooldown"
+                  : "Voice paused · reconnecting"
+              }
               onSent={(message) => {
                 controller.acceptVoice(message);
                 setNearLatest(true);
                 list.current?.scrollToOffset({ offset: 0, animated: true });
               }}
             />
+            )}
+            <View style={{ display: voiceExpanded ? "none" : "flex" }}>
+              <Button
+                label={draft.length > 2000 ? "Send first part ↑" : "Send ↑"}
+                disabled={
+                  !ready || !validText(firstMessagePart(draft)) || sendRateLimited
+                }
+                onPress={() => void send()}
+              />
+            </View>
+          </View>
+          {!!voiceNotice && (
+            <Text accessibilityLiveRegion="polite" style={styles.caption}>
+              {voiceNotice}
+            </Text>
           )}
           {draft.length > 2000 && (
             <Text style={styles.caption}>

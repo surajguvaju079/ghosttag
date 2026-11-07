@@ -71,15 +71,25 @@ describe('Messaging input contracts', () => {
   ])('rejects malformed pagination (%p)', (query) => {
     expect(() => historyQuery(query)).toThrow();
   });
-  it('accepts only a bounded MP4 voice payload with a UUIDv4 retry key', () => {
+  it('accepts a 5 MiB MP4 voice payload without a ten-second cap', () => {
     const bytes = Buffer.from('0000ftypisom');
     expect(
-      voicePayload('GH-1234', randomUUID(), '10000', 'audio/mp4', bytes),
-    ).toMatchObject({ code: 'GH-1234', durationMs: 10000, data: bytes });
+      voicePayload('GH-1234', randomUUID(), '600000', 'audio/mp4', bytes),
+    ).toMatchObject({ code: 'GH-1234', durationMs: 600000, data: bytes });
+    expect(() =>
+      voicePayload(
+        'GH-1234',
+        randomUUID(),
+        '600000',
+        'audio/mp4',
+        Buffer.concat([bytes, Buffer.alloc(5_242_880 - bytes.length)]),
+      ),
+    ).not.toThrow();
     for (const [duration, type, data] of [
-      ['10001', 'audio/mp4', bytes],
+      ['2147483648', 'audio/mp4', bytes],
+      ['0', 'audio/mp4', bytes],
       ['5000', 'audio/webm', bytes],
-      ['5000', 'audio/mp4', Buffer.alloc(262145)],
+      ['5000', 'audio/mp4', Buffer.alloc(5_242_881)],
       ['5000', 'audio/mp4', Buffer.from('not an mp4')],
     ] as const)
       expect(() =>

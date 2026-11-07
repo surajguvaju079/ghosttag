@@ -91,12 +91,12 @@ export function voicePayload(
       keyValue,
     ) ||
     typeof durationValue !== 'string' ||
-    !/^\d{1,5}$/.test(durationValue) ||
+    !/^\d{1,10}$/.test(durationValue) ||
     Number(durationValue) < 1 ||
-    Number(durationValue) > 10_000 ||
+    Number(durationValue) > 2_147_483_647 ||
     contentType !== 'audio/mp4' ||
     data.length < 12 ||
-    data.length > 262_144 ||
+    data.length > 5_242_880 ||
     data.toString('ascii', 4, 8) !== 'ftyp'
   )
     invalid('INVALID_VOICE_PAYLOAD', 'Invalid voice message');

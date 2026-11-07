@@ -74,15 +74,17 @@ cleanup physically deletes expired content and ultimately its room. A purged roo
 returns 404 rather than 410; grace and backlog never grant continued access.
 Operational settings are documented in `docs/operations/messaging-safety.md`.
 
-## Short voice messages
+## Voice messages
 
 `POST /api/v1/rooms/:code/messages/voice` requires the same bearer credential,
 social eligibility and ACTIVE room membership as text sending. Body is raw
-`audio/mp4`, at most 262,144 bytes, with `X-Client-Message-Id` (UUIDv4) and
-`X-Voice-Duration-Ms` (integer 1–10,000) headers. Success is 201 with the same
+`audio/mp4`, at most 5,242,880 bytes, with `X-Client-Message-Id` (UUIDv4) and
+`X-Voice-Duration-Ms` (positive 32-bit integer) headers. There is no separate
+time cap. Success is 201 with the same
 `{message, replayed, clientMessageId}` shape as socket sends. Retries with the
 same key, bytes and duration replay the stored message; changed content conflicts.
-The dedicated `VOICE_SEND` and shared message burst limits apply. The server
+The dedicated `VOICE_SEND` limit allows two uploads per minute per identity and
+eight per minute per network; the shared message burst limit also applies. The server
 checks size and MP4 signature, but does not decode audio to verify duration.
 
 Voice message projections keep `text: "Voice message"` for older clients and

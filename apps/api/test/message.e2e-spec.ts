@@ -314,7 +314,10 @@ describe('Real-time messaging + PostgreSQL', () => {
   it('stores one voice clip, broadcasts metadata, and serves audio only to active room members', async () => {
     const receiver = await connect(member.token);
     await subscribe(receiver);
-    const bytes = Buffer.from('0000ftypisom');
+    const bytes = Buffer.concat([
+      Buffer.from('0000ftypisom'),
+      Buffer.alloc(300_000 - 12),
+    ]);
     const key = randomUUID();
     const upload = (token: string, data = bytes) =>
       request(app.getHttpServer())
@@ -322,14 +325,14 @@ describe('Real-time messaging + PostgreSQL', () => {
         .auth(token, { type: 'bearer' })
         .set('Content-Type', 'audio/mp4')
         .set('X-Client-Message-Id', key)
-        .set('X-Voice-Duration-Ms', '2400')
+        .set('X-Voice-Duration-Ms', '120000')
         .send(data);
     const pushed = event<PublicMessage>(receiver, 'message:created');
     const first = await upload(owner.token).expect(201);
     const sent = first.body as SendData;
     expect(first.body).toMatchObject({
       replayed: false,
-      message: { code, text: 'Voice message', voice: { durationMs: 2400 } },
+      message: { code, text: 'Voice message', voice: { durationMs: 120000 } },
     });
     expect(await pushed).toEqual(sent.message);
     const id = sent.message.messageId;
@@ -346,7 +349,6 @@ describe('Real-time messaging + PostgreSQL', () => {
       replayed: true,
       message: { messageId: id },
     });
-    await upload(owner.token, Buffer.from('0000ftypdiff')).expect(409);
     await request(app.getHttpServer())
       .post(`/api/v1/rooms/${code}/messages/${id}/reports`)
       .auth(member.token, { type: 'bearer' })
@@ -375,6 +377,20 @@ describe('Real-time messaging + PostgreSQL', () => {
       .expect(410);
     await prisma.message.delete({ where: { publicId: id } });
     expect(await prisma.voiceClip.count()).toBe(0);
+  });
+
+  it('rejects changed bytes on a voice retry key', async () => {
+    const key = randomUUID();
+    const upload = (bytes: Buffer) =>
+      request(app.getHttpServer())
+        .post(`/api/v1/rooms/${code}/messages/voice`)
+        .auth(owner.token, { type: 'bearer' })
+        .set('Content-Type', 'audio/mp4')
+        .set('X-Client-Message-Id', key)
+        .set('X-Voice-Duration-Ms', '120000')
+        .send(bytes);
+    await upload(Buffer.from('0000ftypisom')).expect(201);
+    await upload(Buffer.from('0000ftypdiff')).expect(409);
   });
 
   it('persists a same-room reply and rejects a cross-room target', async () => {

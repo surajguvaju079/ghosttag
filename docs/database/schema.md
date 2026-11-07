@@ -261,7 +261,8 @@ Videos
 Files
 
 Short voice messages are introduced by [decision 0008](../decisions/0008-room-voice-messages.md).
-Their bytes live in a `voice_clips` row tied to a message and cascade when that
+Their bytes live in a `voice_clips` row tied to a message, are limited to 5 MiB
+with a positive 32-bit duration in milliseconds, and cascade when that
 message is deleted. Other media types remain unsupported.
 
 Editing

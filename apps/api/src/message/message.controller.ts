@@ -43,20 +43,20 @@ export class MessageController {
     @Req() request: AuthenticatedRequest,
     @Param('code') code: string,
   ) {
-    if (Number(request.headers['content-length']) > 262_144)
+    if (Number(request.headers['content-length']) > 5_242_880)
       throw new PayloadTooLargeException({
         code: 'VOICE_TOO_LARGE',
-        message: 'Voice clip exceeds 256 KB',
+        message: 'Voice clip exceeds 5 MiB',
       });
     const parts: Buffer[] = [];
     let length = 0;
     for await (const part of request) {
       const bytes = Buffer.from(part as Buffer);
       length += bytes.length;
-      if (length > 262_144)
+      if (length > 5_242_880)
         throw new PayloadTooLargeException({
           code: 'VOICE_TOO_LARGE',
-          message: 'Voice clip exceeds 256 KB',
+          message: 'Voice clip exceeds 5 MiB',
         });
       parts.push(bytes);
     }

@@ -327,15 +327,15 @@ export class ApiClient {
     durationMs: number,
     file: File,
   ): Promise<SendResult> {
-    if (!file.exists || file.size < 1 || file.size > 262_144)
+    if (!file.exists || file.size < 1 || file.size > 5_242_880)
       throw new ApiError({
         statusCode: 413,
         code: "VOICE_TOO_LARGE",
-        message: "Voice clip exceeds 256 KB",
+        message: "Voice clip exceeds 5 MiB",
       });
     const { fetch: expoFetch } = await import("expo/fetch");
     const abort = new AbortController();
-    const timer = setTimeout(() => abort.abort(), 30000);
+    const timer = setTimeout(() => abort.abort(), 120_000);
     try {
       const response = await expoFetch(
         `${this.baseUrl}/rooms/${normalizeCode(code)}/messages/voice`,

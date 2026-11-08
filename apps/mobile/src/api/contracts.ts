@@ -73,6 +73,28 @@ export type Pulse = {
   results: { A: number; B: number } | null;
 };
 export type PulseList = { pulses: Pulse[] };
+export type RoomGame = {
+  code: string;
+  gameId: string;
+  kind: "RPS" | "ANTAKSHARI";
+  status: "ACTIVE" | "REVEALED" | "ENDED";
+  startedAt: string;
+  deadlineAt: string;
+  lastActionAt: string;
+  starter: Message["author"];
+  rps: {
+    myChoice: "ROCK" | "PAPER" | "SCISSORS" | null;
+    submittedCount: number;
+    choices: { player: Message["author"]; choice: "ROCK" | "PAPER" | "SCISSORS" }[] | null;
+    winnerIds: string[];
+    outcome: "WIN" | "DRAW" | "NO_ROUND" | null;
+  } | null;
+  antakshari: {
+    nextCue: string | null;
+    lastPlayerId: string | null;
+    turns: { messageId: string; player: Message["author"]; title: string; nextCue: string; createdAt: string }[];
+  } | null;
+};
 export type Participant = Ghost & { participantId: string };
 export type Subscription = {
   code: string;

@@ -7,6 +7,7 @@ import type {
   Message,
   PlaygroundToday,
   Pulse,
+  RoomGame,
   Participant,
   ReportReason,
   ReactionType,
@@ -34,6 +35,10 @@ export type RoomState = {
   messages: Message[];
   playground?: PlaygroundToday;
   pulses: Pulse[];
+  game?: RoomGame;
+  gameError?: ApiError;
+  gameRetryAt: number;
+  gameWorking: boolean;
   pulseError?: ApiError;
   pulseRetryAt: number;
   pulseWorking: boolean;
@@ -51,6 +56,8 @@ export class RoomSession {
     status: "loading",
     messages: [],
     pulses: [],
+    gameRetryAt: 0,
+    gameWorking: false,
     pulseRetryAt: 0,
     pulseWorking: false,
     pending: [],
@@ -72,6 +79,9 @@ export class RoomSession {
   private reconnectAttempts = 0;
   private operation = false;
   private playgroundRequest = 0;
+  private gameRequest = 0;
+  private gameStartAttempt?: { kind: RoomGame["kind"]; key: string };
+  private gameTurnAttempt?: { gameId: string; title: string; nextCue: string; key: string };
   constructor(
     private api: ApiClient,
     private token: string,
@@ -131,7 +141,7 @@ export class RoomSession {
     this.listeners.clear();
     this.historyLoaded = false;
     this.historyAnchor = undefined;
-    this.state = { ...this.state, messages: [], pending: [], pulses: [], playground: undefined };
+    this.state = { ...this.state, messages: [], pending: [], pulses: [], game: undefined, playground: undefined };
   }
   expire(error?: ApiError) {
     this.active = false;
@@ -143,6 +153,7 @@ export class RoomSession {
       participant: undefined,
       messages: [],
       pulses: [],
+      game: undefined,
       playground: undefined,
       pending: [],
       error:
@@ -169,6 +180,7 @@ export class RoomSession {
         participant: undefined,
         messages: [],
         pulses: [],
+        game: undefined,
         playground: undefined,
         pending: [],
         error: failure,
@@ -185,6 +197,7 @@ export class RoomSession {
         participant: undefined,
         messages: [],
         pulses: [],
+        game: undefined,
         playground: undefined,
         pending: [],
         error: failure,
@@ -208,6 +221,7 @@ export class RoomSession {
         participant: undefined,
         messages: [],
         pulses: [],
+        game: undefined,
         playground: undefined,
         pending: [],
         error: failure,
@@ -288,6 +302,7 @@ export class RoomSession {
         this.patch({
           messages: [],
           pulses: [],
+          game: undefined,
           playground: undefined,
           pending: [],
           nextCursor: null,
@@ -296,6 +311,7 @@ export class RoomSession {
       }
       this.patch({ details, members, membership: membership.membership });
       void this.refreshPlayground();
+      void this.refreshGame();
       const socket = this.makeSocket();
       this.socket = socket;
       socket.on("connect", () => {
@@ -314,6 +330,9 @@ export class RoomSession {
       });
       socket.on("pulse:updated", (event: { code: string; pulseId: string }) => {
         if (this.current(epoch) && event.code === this.code) void this.refreshPlayground();
+      });
+      socket.on("game:updated", (event: { code: string; gameId: string }) => {
+        if (this.current(epoch) && event.code === this.code) void this.refreshGame();
       });
       socket.on(
         "room:invalidated",
@@ -422,6 +441,7 @@ export class RoomSession {
         error: undefined,
       });
       void this.refreshPlayground();
+      void this.refreshGame();
     } catch (error) {
       if (!this.current(epoch)) return;
       this.fail(error);
@@ -481,6 +501,67 @@ export class RoomSession {
       if (failure.failure.statusCode === 401 || ageAccessCodes.includes(failure.failure.code)) this.fail(error);
       else this.patch({ pulseError: failure });
     }
+  }
+  async refreshGame() {
+    if (this.expired() || !this.active) return;
+    const epoch = this.epoch;
+    const request = ++this.gameRequest;
+    try {
+      const result = await this.api.game(this.token, this.code);
+      if (this.current(epoch) && request === this.gameRequest)
+        this.patch({ game: result.game ?? undefined, gameError: undefined });
+    } catch (error) {
+      if (!this.current(epoch) || request !== this.gameRequest) return;
+      this.failGame(error);
+    }
+  }
+  private failGame(error: unknown) {
+    const failure = asApiError(error);
+    if (failure.failure.statusCode === 401 || ageAccessCodes.includes(failure.failure.code)) this.fail(error);
+    else this.patch({ gameError: failure, gameRetryAt: Math.max(this.state.gameRetryAt, failure.retryAt) });
+  }
+  private async gameAction(action: () => Promise<RoomGame>) {
+    if (this.expired() || this.state.status !== "ready" || this.state.gameWorking || Date.now() < this.state.gameRetryAt) return;
+    const epoch = this.epoch;
+    this.gameRequest++;
+    this.patch({ gameWorking: true, gameError: undefined });
+    try {
+      const game = await action();
+      if (this.current(epoch)) this.patch({ game });
+      return game;
+    } catch (error) {
+      if (this.current(epoch)) this.failGame(error);
+    } finally {
+      if (this.current(epoch)) this.patch({ gameWorking: false });
+    }
+  }
+  async startGame(kind: RoomGame["kind"]) {
+    const attempt = this.gameStartAttempt?.kind === kind
+      ? this.gameStartAttempt
+      : { kind, key: this.uuid() };
+    this.gameStartAttempt = attempt;
+    const result = await this.gameAction(() => this.api.startGame(this.token, this.code, kind, attempt.key));
+    if (result) this.gameStartAttempt = undefined;
+  }
+  async chooseGame(gameId: string, choice: "ROCK" | "PAPER" | "SCISSORS") {
+    await this.gameAction(() => this.api.chooseGame(this.token, this.code, gameId, choice));
+  }
+  async turnGame(gameId: string, title: string, nextCue: string) {
+    const attempt = this.gameTurnAttempt;
+    const key = attempt?.gameId === gameId && attempt.title === title && attempt.nextCue === nextCue
+      ? attempt.key : this.uuid();
+    this.gameTurnAttempt = { gameId, title, nextCue, key };
+    const epoch = this.epoch;
+    const result = await this.gameAction(async () => {
+      const response = await this.api.turnGame(this.token, this.code, gameId, key, title, nextCue);
+      if (this.current(epoch)) this.patch({ messages: mergeLive(this.state.messages, response.message) });
+      return response.game;
+    });
+    if (result) this.gameTurnAttempt = undefined;
+    return !!result;
+  }
+  async endGame(gameId: string) {
+    await this.gameAction(() => this.api.endGame(this.token, this.code, gameId));
   }
   private failPulse(error: unknown) {
     const failure = asApiError(error);

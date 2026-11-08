@@ -25,3 +25,32 @@ start at most ten Pulses (`409 PULSE_LIMIT`). Starts and votes use the
 `PULSE_ACTION` rate policy. The `/rooms` Socket.IO namespace emits
 `pulse:updated` with `{code,pulseId}` after committed changes; clients must
 refetch because the event is best effort.
+
+## Room games
+
+All game routes require an eligible identity, social access, a live room, and
+active membership. Read responses use `Cache-Control: no-store`. The
+`GAME_ACTION` rate policy applies to mutations.
+
+- `GET /api/v1/rooms/:code/game` returns `{game}` with the most recent game or
+  `null`. State is viewer-specific.
+- `POST /api/v1/rooms/:code/game` accepts `{kind:"RPS"|"ANTAKSHARI",clientGameId}`
+  with a UUID client ID. Retrying a start key returns that game. Starting while
+  another game is active returns `409 GAME_ACTIVE`.
+- `POST /api/v1/rooms/:code/game/:gameId/choice` accepts
+  `{choice:"ROCK"|"PAPER"|"SCISSORS"}`. Repeating a choice succeeds; changing
+  it returns `409 GAME_CHOICE_LOCKED`.
+- `POST /api/v1/rooms/:code/game/:gameId/turn` accepts UUID `clientTurnId`,
+  `title` (1–120 characters), and `nextCue` (1–12 characters). It returns
+  `{game,message}`. Retrying the key and content returns the same message.
+  Consecutive turns from one member return `409 WAIT_FOR_ANOTHER_PLAYER`.
+- `POST /api/v1/rooms/:code/game/:gameId/end` ends a game for its starter or
+  room owner; others receive `403 GAME_END_FORBIDDEN`.
+
+Game state includes public `gameId`, `kind`, `status`, timestamps, and a
+room-scoped starter ghost. RPS returns the viewer's `myChoice` and submission
+count during play; after reveal it returns ghost choices, winner participant
+IDs, and `WIN`, `DRAW`, or `NO_ROUND`. Antakshari returns the next cue and
+latest 20 turns. Internal IDs are omitted. The `/rooms` Socket.IO namespace
+emits volatile `game:updated` hints containing `{code,gameId}`. Clients
+refetch authorized state after a hint or reconnect.

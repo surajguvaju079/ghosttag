@@ -180,6 +180,15 @@ every delivery rechecks authorization and wall-clock room/credential expiration.
 Credential and room locks order enqueue against revocation, leave, and room updates.
 Data already queued while authorized cannot be recalled or erased from a client.
 
+### `game:updated`
+
+Payload: `{ "code": "GH-4829", "gameId": "g_<32 lowercase hex characters>" }`.
+This is a volatile hint after a room game start, choice, Antakshari turn, or end.
+Delivery uses the same active membership and room authorization checks as message
+pushes. It contains no RPS choice or song content. Clients fetch
+`GET /api/v1/rooms/:code/game` after a hint or reconnect; local deadlines also
+trigger a refresh to reveal a completed round or ended idle game.
+
 ## Errors
 
 | Status | Code | Meaning |

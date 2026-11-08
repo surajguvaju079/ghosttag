@@ -18,6 +18,7 @@ export const defaultPolicies = {
   WS_SUBSCRIBE: { network: 180, identity: 30, windowMs: 60_000 },
   MESSAGE_REPORT: { network: 50, identity: 10, windowMs: 86_400_000 },
   PULSE_ACTION: { network: 120, identity: 30, windowMs: 60_000 },
+  GAME_ACTION: { network: 120, identity: 30, windowMs: 60_000 },
 } as const;
 export type RatePolicy = keyof typeof defaultPolicies;
 

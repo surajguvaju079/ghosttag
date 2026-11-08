@@ -9,7 +9,14 @@ Draft — Phase 1
 This document defines the foundational GhostTag domain model.
 
 The schema is intentionally designed incrementally. Only the core identity,
-room, messaging, reaction, and Pulse domains are defined here.
+room, messaging, reaction, Pulse, and room game domains are defined here.
+
+Room games use `room_games` with a public ID, starter membership, kind,
+deadline, last action, and optional end time. `game_choices` stores one private
+RPS choice per game and membership. `game_turns` stores ordered Antakshari
+titles, next sounds, and a one-to-one reference to an ordinary message. Room
+deletion cascades through these records; message reporting and retention apply
+to turn messages. Migration `20261113000000_room_games` creates the tables.
 
 The Prisma schema must implement this document rather than independently
 introducing domain decisions.

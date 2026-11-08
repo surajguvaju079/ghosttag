@@ -10,8 +10,10 @@ import type {
   PlaygroundToday,
   Pulse,
   PulseList,
+  RoomGame,
   Membership,
   Members,
+  Message,
   ReportReason,
   RoomDetails,
   SendResult,
@@ -123,6 +125,11 @@ const messages: Record<string, string> = {
   PULSE_EXPIRED: "This Pulse has ended. Try another one.",
   PULSE_ALREADY_VOTED: "Your vote is already recorded.",
   PULSE_NOT_FOUND: "This Pulse is no longer available.",
+  GAME_ACTIVE: "A game is already active in this room.",
+  GAME_ENDED: "This game has ended. Start another one.",
+  GAME_NOT_FOUND: "This game is no longer available.",
+  GAME_CHOICE_LOCKED: "Your choice is already locked in.",
+  WAIT_FOR_ANOTHER_PLAYER: "Let another ghost take the next song turn.",
 };
 export function friendlyError(error: unknown, now?: number) {
   const parsed = asApiError(error);
@@ -432,6 +439,21 @@ export class ApiClient {
   }
   votePulse(token: string, code: string, pulseId: string, option: "A" | "B") {
     return this.request<Pulse>(`/rooms/${normalizeCode(code)}/pulses/${encodeURIComponent(pulseId)}/vote`, token, { option }, "POST");
+  }
+  game(token: string, code: string) {
+    return this.request<{ game: RoomGame | null }>(`/rooms/${normalizeCode(code)}/game`, token);
+  }
+  startGame(token: string, code: string, kind: RoomGame["kind"], clientGameId: string) {
+    return this.request<RoomGame>(`/rooms/${normalizeCode(code)}/game`, token, { kind, clientGameId }, "POST");
+  }
+  chooseGame(token: string, code: string, gameId: string, choice: "ROCK" | "PAPER" | "SCISSORS") {
+    return this.request<RoomGame>(`/rooms/${normalizeCode(code)}/game/${encodeURIComponent(gameId)}/choice`, token, { choice }, "POST");
+  }
+  turnGame(token: string, code: string, gameId: string, clientTurnId: string, title: string, nextCue: string) {
+    return this.request<{ game: RoomGame; message: Message }>(`/rooms/${normalizeCode(code)}/game/${encodeURIComponent(gameId)}/turn`, token, { clientTurnId, title, nextCue }, "POST");
+  }
+  endGame(token: string, code: string, gameId: string) {
+    return this.request<RoomGame>(`/rooms/${normalizeCode(code)}/game/${encodeURIComponent(gameId)}/end`, token, {}, "POST");
   }
   report(token: string, code: string, messageId: string, reason: ReportReason) {
     return this.request<{ accepted: true }>(

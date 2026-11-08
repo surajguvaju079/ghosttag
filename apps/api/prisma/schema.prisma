@@ -64,10 +64,10 @@ model AnonymousUser {
   memberships        RoomMembership[]
   ageEligibility     AgeEligibility?
   matchSearch        MatchSearch?
-  matchesA           MatchSession[] @relation("MatchA")
-  matchesB           MatchSession[] @relation("MatchB")
-  blocksCreated      MatchBlock[] @relation("Blocker")
-  blocksReceived     MatchBlock[] @relation("Blocked")
+  matchesA           MatchSession[]      @relation("MatchA")
+  matchesB           MatchSession[]      @relation("MatchB")
+  blocksCreated      MatchBlock[]        @relation("Blocker")
+  blocksReceived     MatchBlock[]        @relation("Blocked")
 
   @@map("anonymous_users")
 }
@@ -82,12 +82,12 @@ enum AgeAssessmentMethod {
 }
 
 model AgeEligibility {
-  userId        String                 @id @db.Uuid
+  userId        String               @id @db.Uuid
   result        AgeEligibilityResult
-  method        AgeAssessmentMethod    @default(DECLARED_DOB)
-  assessedAt    DateTime               @default(now()) @db.Timestamptz(6)
-  policyVersion String                 @db.VarChar(80)
-  user          AnonymousUser          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  method        AgeAssessmentMethod  @default(DECLARED_DOB)
+  assessedAt    DateTime             @default(now()) @db.Timestamptz(6)
+  policyVersion String               @db.VarChar(80)
+  user          AnonymousUser        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("age_eligibility")
 }
@@ -106,25 +106,26 @@ model IdentityCredential {
 }
 
 model Room {
-  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  code        String     @unique @db.VarChar(7)
-  kind        RoomKind   @default(GROUP)
-  inviteId    String?    @unique @db.Uuid
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code         String     @unique @db.VarChar(7)
+  kind         RoomKind   @default(GROUP)
+  inviteId     String?    @unique @db.Uuid
   discoverable Boolean    @default(false)
-  vibe        RoomVibe
-  name        String?    @db.VarChar(100)
-  creatorId   String     @db.Uuid
-  status      RoomStatus @default(ACTIVE)
-  lockedUntil DateTime?  @db.Timestamptz(6)
-  createdAt   DateTime   @default(now()) @db.Timestamptz(6)
-  expiresAt   DateTime   @db.Timestamptz(6)
+  vibe         RoomVibe
+  name         String?    @db.VarChar(100)
+  creatorId    String     @db.Uuid
+  status       RoomStatus @default(ACTIVE)
+  lockedUntil  DateTime?  @db.Timestamptz(6)
+  createdAt    DateTime   @default(now()) @db.Timestamptz(6)
+  expiresAt    DateTime   @db.Timestamptz(6)
 
-  matchSession MatchSession?
-  creator     AnonymousUser    @relation("RoomCreator", fields: [creatorId], references: [id])
-  memberships RoomMembership[]
+  matchSession       MatchSession?
+  creator            AnonymousUser       @relation("RoomCreator", fields: [creatorId], references: [id])
+  memberships        RoomMembership[]
   participantReports ParticipantReport[]
-  messages    Message[]
-  polls       Poll[]
+  messages           Message[]
+  polls              Poll[]
+  games              RoomGame[]
 
   @@index([expiresAt, id])
   @@index([status, expiresAt])
@@ -145,14 +146,17 @@ model RoomMembership {
   leftAt      DateTime?            @db.Timestamptz(6)
   joinedAt    DateTime             @default(now()) @db.Timestamptz(6)
 
-  room      Room            @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  user      AnonymousUser   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages  Message[]
-  reports   MessageReport[]
-  participantReportsMade ParticipantReport[] @relation("ParticipantReporter")
+  room                       Room                @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user                       AnonymousUser       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages                   Message[]
+  reports                    MessageReport[]
+  participantReportsMade     ParticipantReport[] @relation("ParticipantReporter")
   participantReportsReceived ParticipantReport[] @relation("ParticipantTarget")
-  reactions Reaction[]
-  pollVotes PollVote[]
+  reactions                  Reaction[]
+  pollVotes                  PollVote[]
+  gamesStarted               RoomGame[]          @relation("GameStarter")
+  gameChoices                GameChoice[]
+  gameTurns                  GameTurn[]
 
   @@unique([userId, roomId])
   @@index([userId])
@@ -175,8 +179,9 @@ model Message {
   reactions  Reaction[]
   reports    MessageReport[]
   voiceClip  VoiceClip?
-  replyTo    Message? @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
-  replies    Message[] @relation("MessageReply")
+  gameTurn   GameTurn?
+  replyTo    Message?        @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies    Message[]       @relation("MessageReply")
 
   @@unique([membershipId, clientMessageId])
   @@index([roomId, createdAt, publicId])
@@ -213,16 +218,16 @@ model MessageReport {
 }
 
 model ParticipantReport {
-  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  roomId String @db.Uuid
-  reporterMembershipId String @db.Uuid
-  targetMembershipId String @db.Uuid
-  reason String @db.VarChar(32)
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roomId               String   @db.Uuid
+  reporterMembershipId String   @db.Uuid
+  targetMembershipId   String   @db.Uuid
+  reason               String   @db.VarChar(32)
+  createdAt            DateTime @default(now()) @db.Timestamptz(6)
 
-  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  room     Room           @relation(fields: [roomId], references: [id], onDelete: Cascade)
   reporter RoomMembership @relation("ParticipantReporter", fields: [reporterMembershipId], references: [id], onDelete: Cascade)
-  target RoomMembership @relation("ParticipantTarget", fields: [targetMembershipId], references: [id], onDelete: Cascade)
+  target   RoomMembership @relation("ParticipantTarget", fields: [targetMembershipId], references: [id], onDelete: Cascade)
 
   @@unique([roomId, reporterMembershipId, targetMembershipId])
   @@index([createdAt])
@@ -279,14 +284,71 @@ model PollVote {
   @@map("poll_votes")
 }
 
+model RoomGame {
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  publicId              String    @unique @default(dbgenerated("('g_'::text || replace((gen_random_uuid())::text, '-'::text, ''::text))")) @db.VarChar(34)
+  roomId                String    @db.Uuid
+  startedByMembershipId String    @db.Uuid
+  clientGameId          String    @db.Uuid
+  kind                  String    @db.VarChar(20)
+  createdAt             DateTime  @default(now()) @db.Timestamptz(6)
+  deadlineAt            DateTime  @db.Timestamptz(6)
+  lastActionAt          DateTime  @default(now()) @db.Timestamptz(6)
+  endedAt               DateTime? @db.Timestamptz(6)
+
+  room    Room           @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  starter RoomMembership @relation("GameStarter", fields: [startedByMembershipId], references: [id], onDelete: Cascade)
+  choices GameChoice[]
+  turns   GameTurn[]
+
+  @@unique([roomId, startedByMembershipId, clientGameId])
+  @@index([roomId, createdAt(sort: Desc)])
+  @@map("room_games")
+}
+
+model GameChoice {
+  gameId       String   @db.Uuid
+  membershipId String   @db.Uuid
+  choice       String   @db.VarChar(8)
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+
+  game       RoomGame       @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  membership RoomMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+
+  @@id([gameId, membershipId])
+  @@map("game_choices")
+}
+
+model GameTurn {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  gameId       String   @db.Uuid
+  membershipId String   @db.Uuid
+  clientTurnId String   @db.Uuid
+  sequence     Int
+  title        String   @db.VarChar(120)
+  nextCue      String   @db.VarChar(12)
+  messageId    String   @unique @db.Uuid
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+
+  game       RoomGame       @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  membership RoomMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  message    Message        @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([gameId, membershipId, clientTurnId])
+  @@unique([gameId, sequence])
+  @@index([gameId, createdAt])
+  @@map("game_turns")
+}
+
 model MatchSearch {
-  userId    String @id @db.Uuid
-  publicId  String @unique @default(dbgenerated("('s_'::text || replace((gen_random_uuid())::text, '-'::text, ''::text))")) @db.VarChar(34)
-  topic     String @default("open") @db.VarChar(32)
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  expiresAt DateTime @db.Timestamptz(6)
-  leaseUntil DateTime @db.Timestamptz(6)
-  user AnonymousUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String        @id @db.Uuid
+  publicId   String        @unique @default(dbgenerated("('s_'::text || replace((gen_random_uuid())::text, '-'::text, ''::text))")) @db.VarChar(34)
+  topic      String        @default("open") @db.VarChar(32)
+  createdAt  DateTime      @default(now()) @db.Timestamptz(6)
+  expiresAt  DateTime      @db.Timestamptz(6)
+  leaseUntil DateTime      @db.Timestamptz(6)
+  user       AnonymousUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([expiresAt])
   @@index([leaseUntil])
   @@index([topic, createdAt])
@@ -294,28 +356,30 @@ model MatchSearch {
 }
 
 model MatchSession {
-  roomId String @id @db.Uuid
-  publicId String @unique @default(dbgenerated("('c_'::text || replace((gen_random_uuid())::text, '-'::text, ''::text))")) @db.VarChar(34)
-  topic String @default("open") @db.VarChar(32)
-  userAId String @db.Uuid
-  userBId String @db.Uuid
-  extended Boolean @default(false)
-  voteA Boolean @default(false)
-  voteB Boolean @default(false)
-  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  userA AnonymousUser @relation("MatchA", fields: [userAId], references: [id], onDelete: Cascade)
-  userB AnonymousUser @relation("MatchB", fields: [userBId], references: [id], onDelete: Cascade)
+  roomId   String        @id @db.Uuid
+  publicId String        @unique @default(dbgenerated("('c_'::text || replace((gen_random_uuid())::text, '-'::text, ''::text))")) @db.VarChar(34)
+  topic    String        @default("open") @db.VarChar(32)
+  userAId  String        @db.Uuid
+  userBId  String        @db.Uuid
+  extended Boolean       @default(false)
+  voteA    Boolean       @default(false)
+  voteB    Boolean       @default(false)
+  room     Room          @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userA    AnonymousUser @relation("MatchA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB    AnonymousUser @relation("MatchB", fields: [userBId], references: [id], onDelete: Cascade)
+
   @@index([userAId])
   @@index([userBId])
   @@map("match_sessions")
 }
 
 model MatchBlock {
-  blockerId String @db.Uuid
-  blockedId String @db.Uuid
-  createdAt DateTime @default(now()) @db.Timestamptz(6)
-  blocker AnonymousUser @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
-  blocked AnonymousUser @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  blockerId String        @db.Uuid
+  blockedId String        @db.Uuid
+  createdAt DateTime      @default(now()) @db.Timestamptz(6)
+  blocker   AnonymousUser @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked   AnonymousUser @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
   @@id([blockerId, blockedId])
   @@index([blockedId])
   @@map("match_blocks")

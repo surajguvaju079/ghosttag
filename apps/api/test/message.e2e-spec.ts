@@ -209,6 +209,138 @@ describe('Real-time messaging + PostgreSQL', () => {
       .auth(token, { type: 'bearer' });
   }
 
+  function gameRequest(token = owner.token) {
+    return request(app.getHttpServer())
+      .get(`/api/v1/rooms/${code}/game`)
+      .auth(token, { type: 'bearer' });
+  }
+
+  it('keeps RPS choices private until the deadline and reveals the winner', async () => {
+    const started = await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${code}/game`)
+      .auth(owner.token, { type: 'bearer' })
+      .send({ kind: 'RPS', clientGameId: randomUUID() });
+    expect(started.status).toBe(200);
+    const gameId = (started.body as { gameId: string }).gameId;
+    const ownerChoice = await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${code}/game/${gameId}/choice`)
+      .auth(owner.token, { type: 'bearer' })
+      .send({ choice: 'ROCK' });
+    expect(ownerChoice.status).toBe(200);
+    const memberBefore = await gameRequest(member.token);
+    const before = memberBefore.body as { game: { rps: unknown } };
+    expect(before.game.rps).toMatchObject({
+      myChoice: null,
+      submittedCount: 1,
+      choices: null,
+      outcome: null,
+    });
+    expect(JSON.stringify(memberBefore.body)).not.toContain('ROCK');
+    const memberChoice = await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${code}/game/${gameId}/choice`)
+      .auth(member.token, { type: 'bearer' })
+      .send({ choice: 'SCISSORS' });
+    expect(memberChoice.status).toBe(200);
+    const duplicate = await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${code}/game/${gameId}/choice`)
+      .auth(member.token, { type: 'bearer' })
+      .send({ choice: 'PAPER' });
+    expect(duplicate.status).toBe(409);
+    await prisma.roomGame.update({
+      where: { publicId: gameId },
+      data: { deadlineAt: new Date(0) },
+    });
+    const revealed = await gameRequest(member.token);
+    const revealedGame = revealed.body as {
+      game: {
+        rps: { outcome: string; choices: unknown[]; winnerIds: string[] };
+      };
+    };
+    const chosenGame = ownerChoice.body as {
+      starter: { participantId: string };
+    };
+    expect(revealedGame.game.rps.outcome).toBe('WIN');
+    expect(revealedGame.game.rps.choices).toHaveLength(2);
+    expect(revealedGame.game.rps.winnerIds).toContain(
+      chosenGame.starter.participantId,
+    );
+  });
+
+  it('turns Antakshari plays into reportable messages and requires alternating players', async () => {
+    const started = await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${code}/game`)
+      .auth(owner.token, { type: 'bearer' })
+      .send({ kind: 'ANTAKSHARI', clientGameId: randomUUID() });
+    expect(started.status).toBe(200);
+    const gameId = (started.body as { gameId: string }).gameId;
+    const clientTurnId = randomUUID();
+    const play = () =>
+      request(app.getHttpServer())
+        .post(`/api/v1/rooms/${code}/game/${gameId}/turn`)
+        .auth(owner.token, { type: 'bearer' })
+        .send({ clientTurnId, title: 'First song', nextCue: 'M' });
+    const first = await play();
+    expect(first.status).toBe(200);
+    const firstMessage = (first.body as { message: PublicMessage }).message;
+    expect(firstMessage.text).toContain('First song');
+    const retry = await play();
+    expect(retry.status).toBe(200);
+    expect((retry.body as { message: PublicMessage }).message.messageId).toBe(
+      firstMessage.messageId,
+    );
+    const samePlayer = await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${code}/game/${gameId}/turn`)
+      .auth(owner.token, { type: 'bearer' })
+      .send({ clientTurnId: randomUUID(), title: 'Second song', nextCue: 'N' });
+    expect(samePlayer.status).toBe(409);
+    const next = await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${code}/game/${gameId}/turn`)
+      .auth(member.token, { type: 'bearer' })
+      .send({ clientTurnId: randomUUID(), title: 'Member song', nextCue: 'R' });
+    expect(next.status).toBe(200);
+    const messages = await history();
+    expect(
+      (messages.body as { messages: PublicMessage[] }).messages.map(
+        (message) => message.messageId,
+      ),
+    ).toContain(firstMessage.messageId);
+    const report = await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${code}/messages/${firstMessage.messageId}/reports`)
+      .auth(member.token, { type: 'bearer' })
+      .send({ reason: 'SPAM' });
+    expect(report.status).toBe(202);
+  });
+
+  it('allows one active game, denies outsiders, and ends idle Antakshari', async () => {
+    const started = await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${code}/game`)
+      .auth(owner.token, { type: 'bearer' })
+      .send({ kind: 'ANTAKSHARI', clientGameId: randomUUID() });
+    expect(started.status).toBe(200);
+    const gameId = (started.body as { gameId: string }).gameId;
+    const second = await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${code}/game`)
+      .auth(member.token, { type: 'bearer' })
+      .send({ kind: 'RPS', clientGameId: randomUUID() });
+    expect(second.status).toBe(409);
+    const outsider = await createEligibleIdentity();
+    const denied = await gameRequest(outsider.token);
+    expect(denied.status).toBe(403);
+    await prisma.roomGame.update({
+      where: { publicId: gameId },
+      data: { lastActionAt: new Date(Date.now() - 301_000) },
+    });
+    const ended = await gameRequest(member.token);
+    expect((ended.body as { game: { status: string } }).game.status).toBe(
+      'ENDED',
+    );
+    const next = await request(app.getHttpServer())
+      .post(`/api/v1/rooms/${code}/game`)
+      .auth(member.token, { type: 'bearer' })
+      .send({ kind: 'RPS', clientGameId: randomUUID() });
+    expect(next.status).toBe(200);
+  });
+
   it.each([
     [null, 'AUTHENTICATION_REQUIRED'],
     ['invalid', 'INVALID_IDENTITY_CREDENTIAL'],

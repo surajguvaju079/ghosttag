@@ -253,11 +253,7 @@ export class MessageService {
     );
   }
 
-  private publicMessage(
-    message: StoredMessage,
-    code: string,
-    membershipId?: string,
-  ) {
+  publicMessage(message: StoredMessage, code: string, membershipId?: string) {
     return {
       messageId: message.publicId,
       code,

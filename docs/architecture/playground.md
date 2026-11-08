@@ -17,10 +17,35 @@ after an existing draft, preserving the draft text. The room refreshes the catal
 after UTC rollover and retries a failed refresh. All Pulse IDs remain accepted
 from the full catalog so older clients can still start their known choices.
 
-The mobile Playground also offers three text-only cooperative activities: Story
-relay, Word chain, and Three clues. Their instructions are local composer starters;
-members review and send them as ordinary messages. No separate game session,
-score, leaderboard, or activity history is stored.
+The room Playground is game-first. A compact card above the chat composer shows
+the current game, while the Play menu offers Rock, Paper, Scissors and Antakshari.
+Daily prompts, story starters, and Pulses remain under collapsed Ideas. The
+old local-only Story relay, Word chain, and Three clues starters are no longer
+offered in the room. Games work in group and matched rooms.
+
+One game is active per room. Any active member may start one; the starter or
+room owner may end it. A room row lock serializes starts and actions. Game
+state and idempotency keys live in PostgreSQL and are deleted with the room.
+A public game ID is used in URLs and socket hints. There are no scores,
+leaderboards, or permanent player profiles.
+
+Rock, Paper, Scissors lasts 30 seconds or until room expiry. Each member locks
+one private choice; other members see only the number of submissions before
+the deadline. After the deadline, at least two choices reveal together. Two
+distinct choices produce winners under the usual rules; one or three distinct
+choices draw. Fewer than two submissions produce no round.
+
+Antakshari accepts a song title and a manually entered next sound. Members
+judge whether a song fits the sound across languages. The first turn is open
+to anyone; each later turn must come from a different member than the last.
+Each turn creates an ordinary room message in the same transaction, so
+existing message reporting and retention apply. Five minutes without a turn
+ends the game. Room expiry ends access immediately.
+
+Socket.IO sends a room-scoped `game:updated` hint after a committed change.
+The client refetches the authorized REST snapshot on hints, reconnect, and
+local deadlines, recovering from missed volatile events without exposing
+hidden choices through the socket.
 
 Any active room member may start one curated Pulse at a time. The question and
 two options are resolved from a catalog ID, not client text. A Pulse lasts five
@@ -41,4 +66,4 @@ room's polls after the grace period.
 Migration `20261108000000_pulse_public_ids` backfills random public IDs for
 existing polls and adds the curated prompt ID. Apply it before deploying the
 API and then the mobile app. The old poll rows are not displayed as curated
-Pulses. No voice media is stored in this milestone.
+Pulses. Games store no audio or song lyrics.

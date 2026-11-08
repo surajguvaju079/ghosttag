@@ -49,6 +49,20 @@ describe('RateLimitService', () => {
       rates.consume('ROOM_JOIN', 'another', '::ffff:127.0.0.1'),
     ).toThrow();
   });
+  it('limits larger voice uploads to two per identity and eight per network', () => {
+    const identityRates = limiter();
+    identityRates.consume('VOICE_SEND', 'voice-owner', '127.0.0.1');
+    identityRates.consume('VOICE_SEND', 'voice-owner', '127.0.0.2');
+    expect(() =>
+      identityRates.consume('VOICE_SEND', 'voice-owner', '127.0.0.3'),
+    ).toThrow();
+    const networkRates = limiter();
+    for (let i = 0; i < 8; i++)
+      networkRates.consume('VOICE_SEND', `voice-${i}`, '127.0.0.1');
+    expect(() =>
+      networkRates.consume('VOICE_SEND', 'voice-extra', '127.0.0.1'),
+    ).toThrow();
+  });
   it('does not spend another dimension when an atomic multi-limit check fails', () => {
     const rates = limiter({ SAFETY_ROOM_JOIN_NETWORK_LIMIT: 1 });
     rates.consume('ROOM_JOIN', 'a', '127.0.0.1');

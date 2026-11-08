@@ -33,7 +33,7 @@ import {
 import { RoomShare } from "../../components/room-share";
 import { VoiceBubble, VoiceComposer } from "../../components/voice-message";
 import { RoomSession } from "../../rooms/room-session";
-import { roomActivities } from "../../rooms/activities";
+import { ActiveGameCard, PlayMenu } from "../../components/room-playground";
 import { insertStarter } from "../../rooms/insert-starter";
 import { socketTransport } from "../../messaging/transport";
 import { firstMessagePart, validText } from "../../messaging/history";
@@ -91,6 +91,7 @@ function RoomScreen({ code }: { code: string }) {
   );
   const [now, setNow] = useState(() => Date.now());
   const refreshedExpiredPulse = useRef<string | null>(null);
+  const refreshedGameDeadline = useRef<string | null>(null);
   const lastCatalogAttempt = useRef(0);
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -116,7 +117,6 @@ function RoomScreen({ code }: { code: string }) {
   const [modal, setModal] = useState<"members" | "playground" | "leave" | "report" | "participant" | "block" | "blockDone" | null>(
     null,
   );
-  const [playgroundTab, setPlaygroundTab] = useState<"today" | "activities" | "pulses">("today");
   const [selected, setSelected] = useState<Message | null>(null);
   const [selectedParticipant, setSelectedParticipant] = useState<{ participantId: string; ghostName: string } | null>(null);
   const [reason, setReason] = useState<ReportReason>("SPAM");
@@ -163,6 +163,16 @@ function RoomScreen({ code }: { code: string }) {
         ) {
           refreshedExpiredPulse.current = latestPulse.pulseId;
           void controller.refreshPlayground();
+        }
+        const game = controller.state.game;
+        const gameDeadline = game?.kind === "RPS"
+          ? Date.parse(game.deadlineAt)
+          : game ? Date.parse(game.lastActionAt) + 300_000 : undefined;
+        const gameDeadlineKey = game && gameDeadline ? `${game.gameId}:${gameDeadline}` : null;
+        if (game?.status === "ACTIVE" && gameDeadline && time >= gameDeadline &&
+          refreshedGameDeadline.current !== gameDeadlineKey) {
+          refreshedGameDeadline.current = gameDeadlineKey;
+          void controller.refreshGame();
         }
         const expiration = controller.state.details?.room.expiresAt;
         if (
@@ -691,13 +701,32 @@ function RoomScreen({ code }: { code: string }) {
             </View>
           )}
           {!keyboardVisible && ready && <Button
-            label={state.pulses[0] && Date.parse(state.pulses[0].expiresAt) > now ? "Playground · Pulse live" : "Open Playground"}
+            label={state.game?.status === "ACTIVE" ? "Play together · game live" : "Play together"}
             secondary onPress={() => {
-              setPlaygroundTab(state.pulses[0] && Date.parse(state.pulses[0].expiresAt) > now ? "pulses" : "today");
               setModal("playground");
               void controller.refreshPlayground();
+              void controller.refreshGame();
             }}
           />}
+          {state.game && (
+            <ActiveGameCard
+              key={state.game.gameId}
+              game={state.game}
+              now={now}
+              myParticipantId={state.participant?.participantId}
+              owner={state.membership?.role === "OWNER"}
+              ready={ready && now >= state.gameRetryAt}
+              working={state.gameWorking}
+              error={state.gameError}
+              onChoice={(choice) => void controller.chooseGame(state.game!.gameId, choice)}
+              onTurn={(title, nextCue) => controller.turnGame(state.game!.gameId, title, nextCue)}
+              onEnd={() => void controller.endGame(state.game!.gameId)}
+              onAgain={() => {
+                if (state.game?.kind === "RPS") void controller.startGame("RPS");
+                else setModal("playground");
+              }}
+            />
+          )}
           <View style={[styles.row, { alignItems: "flex-end" }]}>
             <TextInput
               ref={input}
@@ -797,66 +826,28 @@ function RoomScreen({ code }: { code: string }) {
         >
           <View style={styles.modal}>
             <View style={styles.modalCard}>
-              {modal === "playground" && <>
-                <Text style={[styles.title, { fontSize: 24 }]}>Playground</Text>
-                <View accessibilityRole="tablist" style={[styles.row, { flexWrap: "wrap" }]}>
-                  {(["today", "activities", "pulses"] as const).map((tab) => <Pressable
-                    key={tab}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected: playgroundTab === tab }}
-                    onPress={() => setPlaygroundTab(tab)}
-                    style={[styles.pill, { minHeight: 44, justifyContent: "center", backgroundColor: playgroundTab === tab ? palette.purple : palette.raised }]}
-                  ><Text>{tab === "today" ? "Today" : tab === "activities" ? "Activities" : "Pulses"}</Text></Pressable>)}
-                </View>
-                <ScrollView contentContainerStyle={{ gap: 12 }} style={{ maxHeight: 400, flexShrink: 1 }}>
-                  {state.pulseError && <Banner>{friendlyError(state.pulseError, now)}</Banner>}
-                  {playgroundTab === "today" && <>
-                  {!state.playground && !state.pulseError && <Text style={styles.muted}>Loading today&apos;s ideas…</Text>}
-                  {state.playground && <View style={styles.card}>
-                    <Text style={styles.label}>TODAY&apos;S QUESTION</Text>
-                    <Text>{state.playground.topic}</Text>
-                    <Button label="Add question to chat" secondary onPress={() => chooseStarter(state.playground!.topic)} />
-                  </View>}
-                  {state.playground && <View style={styles.card}>
-                    <Text style={styles.label}>TODAY&apos;S STORY · ONE SENTENCE EACH</Text>
-                    <Text>{state.playground.story}</Text>
-                    <Button label="Start this story together" secondary onPress={() => chooseStarter(`Story relay: one sentence each. ${state.playground!.story}`)} />
-                  </View>}
-                  <Text style={styles.label}>QUICK PROMPTS</Text>
-                  {state.playground?.prompts.map((prompt) => <Button key={prompt} label={prompt} secondary
-                    onPress={() => chooseStarter(prompt)} />)}
-                  </>}
-                  {playgroundTab === "activities" && <>
-                  <Text style={styles.muted}>Pick a simple activity. Its starter goes into chat for you to edit before sending.</Text>
-                  {roomActivities.map((activity) => <View key={activity.id} style={styles.card}>
-                    <Text style={{ fontWeight: "700" }}>{activity.title}</Text>
-                    <Text style={styles.muted}>{activity.description}</Text>
-                    <Button label="Put starter in chat" secondary
-                      onPress={() => chooseStarter(activity.starter)} />
-                  </View>)}
-                  </>}
-                  {playgroundTab === "pulses" && <>
-                  <Text style={styles.label}>PULSE · CHOOSE TOGETHER</Text>
-                  {state.pulses[0] && <View style={styles.card}>
-                    <Text style={{ fontWeight: "700" }}>{state.pulses[0].question}</Text>
-                    {state.pulses[0].results ? <Text style={styles.muted}>
-                      {state.pulses[0].optionA}: {state.pulses[0].results.A} · {state.pulses[0].optionB}: {state.pulses[0].results.B}
-                    </Text> : <Text style={styles.muted}>Vote to reveal the results.</Text>}
-                    {Date.parse(state.pulses[0].expiresAt) > now && !state.pulses[0].myVote && <>
-                      <Button label={state.pulses[0].optionA} busy={state.pulseWorking} disabled={now < state.pulseRetryAt}
-                        onPress={() => void controller.votePulse(state.pulses[0].pulseId, "A")} />
-                      <Button label={state.pulses[0].optionB} secondary busy={state.pulseWorking} disabled={now < state.pulseRetryAt}
-                        onPress={() => void controller.votePulse(state.pulses[0].pulseId, "B")} />
-                    </>}
-                    <Text style={styles.caption}>{Date.parse(state.pulses[0].expiresAt) > now ? "One vote per person · ends in a few minutes" : "This Pulse has ended"}</Text>
-                  </View>}
-                  {(!state.pulses[0] || Date.parse(state.pulses[0].expiresAt) <= now) && state.playground?.pulses.map((choice) =>
-                    <Button key={choice.id} label={`${choice.question} ${choice.optionA} or ${choice.optionB}`}
-                      secondary busy={state.pulseWorking} disabled={now < state.pulseRetryAt}
-                      onPress={() => void controller.startPulse(choice.id)} />)}
-                  </>}
+              {modal === "playground" && (
+                <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 440, flexShrink: 1 }} contentContainerStyle={{ gap: 12 }}>
+                  <PlayMenu
+                    today={state.playground}
+                    pulse={state.pulses[0]}
+                    activeGame={state.game}
+                    now={now}
+                    working={state.gameWorking}
+                    pulseWorking={state.pulseWorking}
+                    pulseRetryAt={state.pulseRetryAt}
+                    error={state.gameError ?? state.pulseError}
+                    onStart={(kind) => {
+                      void controller.startGame(kind).then(() => {
+                        if (controller.state.game?.kind === kind && controller.state.game.status === "ACTIVE") setModal(null);
+                      });
+                    }}
+                    onStarter={chooseStarter}
+                    onPulseStart={(id) => void controller.startPulse(id)}
+                    onPulseVote={(pulseId, option) => void controller.votePulse(pulseId, option)}
+                  />
                 </ScrollView>
-              </>}
+              )}
               {modal === "members" && (
                 <>
                   {state.details?.room.kind === "GROUP" && state.membership?.role === "OWNER" && <View style={styles.card}>

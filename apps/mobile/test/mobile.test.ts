@@ -14,6 +14,7 @@ import type {
   RoomDetails,
   IdentityStatus,
   Pulse,
+  RoomGame,
 } from "../src/api/contracts";
 import { Session, type CredentialStore } from "../src/auth/session";
 import {
@@ -369,7 +370,24 @@ function harness(
   let detailsError: ApiError | undefined;
   let reportError: ApiError | undefined;
   let pulseRecord: Pulse | undefined;
+  let gameRecord: RoomGame | null = null;
   const api = {
+    game: async () => ({ game: gameRecord }),
+    startGame: async (_token: string, _code: string, kind: RoomGame["kind"]) => {
+      gameRecord = {
+        code: "GH-1234", gameId: `g_${"a".repeat(32)}`, kind, status: "ACTIVE",
+        startedAt: new Date().toISOString(), deadlineAt: new Date(Date.now() + 30000).toISOString(),
+        lastActionAt: new Date().toISOString(),
+        starter: { participantId: "p_abc", ghostName: ghost.ghostName, ghostAvatar: ghost.ghostAvatar },
+        rps: kind === "RPS" ? { myChoice: null, submittedCount: 0, choices: null, winnerIds: [], outcome: null } : null,
+        antakshari: kind === "ANTAKSHARI" ? { nextCue: null, lastPlayerId: null, turns: [] } : null,
+      };
+      return gameRecord;
+    },
+    chooseGame: async (_token: string, _code: string, _id: string, choice: "ROCK" | "PAPER" | "SCISSORS") => {
+      gameRecord = { ...gameRecord!, rps: { ...gameRecord!.rps!, myChoice: choice, submittedCount: 1 } };
+      return gameRecord;
+    },
     today: async () => ({ date: "2026-11-03", topic: "What made today better?", story: "A note arrived at the door.", prompts: ["Tell me a small win."], pulses: [{ id: "plans", question: "Choose", optionA: "A", optionB: "B" }] }),
     pulses: async () => ({ pulses: pulseRecord ? [pulseRecord] : [] }),
     startPulse: async () => {
@@ -471,6 +489,22 @@ test("playground refreshes after live Pulse updates and records one local vote",
     assert.equal(h.controller.state.pulses[0].myVote, "A");
     h.controller.expire();
     assert.deepEqual(h.controller.state.pulses, []);
+  } finally { h.controller.dispose(); }
+});
+test("room game updates recover through the socket hint and clear on expiry", async () => {
+  const h = harness();
+  try {
+    await h.controller.start();
+    await tick();
+    await h.controller.startGame("RPS");
+    assert.equal(h.controller.state.game?.kind, "RPS");
+    await h.controller.chooseGame(h.controller.state.game!.gameId, "ROCK");
+    assert.equal(h.controller.state.game?.rps?.myChoice, "ROCK");
+    h.sockets[0].emit("game:updated", { code: "GH-1234", gameId: h.controller.state.game!.gameId });
+    await tick();
+    assert.equal(h.controller.state.game?.rps?.submittedCount, 1);
+    h.controller.expire();
+    assert.equal(h.controller.state.game, undefined);
   } finally { h.controller.dispose(); }
 });
 test("room bootstrap subscribes, loads membership/history, ignores cross-room pushes, and paginates", async () => {

@@ -9,6 +9,9 @@ import { MessageRepository } from './message.repository';
 import { MessageService } from './message.service';
 import { PlaygroundController, PulseController } from './playground.controller';
 import { PulseService } from './pulse.service';
+import { GameController } from './game.controller';
+import { GameService } from './game.service';
+import { GameRepository } from './game.repository';
 
 @Module({
   imports: [IdentityModule, RoomModule],
@@ -17,6 +20,7 @@ import { PulseService } from './pulse.service';
     MessageReportController,
     PlaygroundController,
     PulseController,
+    GameController,
   ],
   providers: [
     MessageService,
@@ -24,6 +28,8 @@ import { PulseService } from './pulse.service';
     MessageGateway,
     MessageReportService,
     PulseService,
+    GameService,
+    GameRepository,
   ],
 })
 export class MessageModule {}

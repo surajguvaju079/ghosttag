@@ -104,7 +104,8 @@ function VoiceTimeline({
 }
 
 function waitForForeground(): Promise<void> {
-  if (AppState.currentState === "active") return Promise.resolve();
+  if (AppState.currentState === "active" || AppState.currentState === null)
+    return Promise.resolve();
   return new Promise((resolve, reject) => {
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") finish();
@@ -529,8 +530,10 @@ function NativeVoiceComposer({
             accessibilityLabel={
               ready ? "Press and hold to record voice" : disabledLabel
             }
-            accessibilityState={{ disabled: !ready || busy }}
-            disabled={!ready || busy}
+            accessibilityState={{
+              disabled: (!ready && !recording && !starting) || busy,
+            }}
+            disabled={(!ready && !recording && !starting) || busy}
             onPressIn={pressIn}
             onPressOut={pressOut}
             style={({ pressed: down }) => ({
@@ -540,7 +543,7 @@ function NativeVoiceComposer({
               borderWidth: 1,
               borderColor: recording || down ? palette.pink : palette.line,
               backgroundColor: palette.raised,
-              opacity: !ready || busy ? 0.45 : 1,
+              opacity: (!ready && !recording && !starting) || busy ? 0.45 : 1,
               alignItems: "center",
               justifyContent: "center",
             })}

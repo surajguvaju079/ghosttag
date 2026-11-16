@@ -92,6 +92,8 @@ function RoomScreen({ code }: { code: string }) {
   const [now, setNow] = useState(() => Date.now());
   const refreshedExpiredPulse = useRef<string | null>(null);
   const refreshedGameDeadline = useRef<string | null>(null);
+  const nextQuickIdea = useRef(0);
+  const [momentStep, setMomentStep] = useState<0 | 1 | 2 | 3 | 4>(0);
   const lastCatalogAttempt = useRef(0);
   const [draft, setDraft] = useState("");
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -713,6 +715,7 @@ function RoomScreen({ code }: { code: string }) {
               key={state.game.gameId}
               game={state.game}
               now={now}
+              keyboardVisible={keyboardVisible}
               myParticipantId={state.participant?.participantId}
               owner={state.membership?.role === "OWNER"}
               ready={ready && now >= state.gameRetryAt}
@@ -836,14 +839,26 @@ function RoomScreen({ code }: { code: string }) {
                     working={state.gameWorking}
                     pulseWorking={state.pulseWorking}
                     pulseRetryAt={state.pulseRetryAt}
+                    momentStep={momentStep}
+                    onMomentStep={setMomentStep}
                     error={state.gameError ?? state.pulseError}
-                    onStart={(kind) => {
-                      void controller.startGame(kind).then(() => {
-                        if (controller.state.game?.kind === kind && controller.state.game.status === "ACTIVE") setModal(null);
-                      });
+                    onStart={async (kind) => {
+                      await controller.startGame(kind);
+                      const started = controller.state.game?.kind === kind && controller.state.game.status === "ACTIVE";
+                      if (started) setModal(null);
+                      return started;
                     }}
+                    onJoin={() => setModal(null)}
                     onStarter={chooseStarter}
-                    onPulseStart={(id) => void controller.startPulse(id)}
+                    onQuickIdea={(ideas) => {
+                      const idea = ideas[nextQuickIdea.current % ideas.length];
+                      nextQuickIdea.current += 1;
+                      return idea;
+                    }}
+                    onPulseStart={async (id) => {
+                      await controller.startPulse(id);
+                      return !controller.state.pulseError && controller.state.pulses.some((item) => Date.parse(item.expiresAt) > Date.now());
+                    }}
                     onPulseVote={(pulseId, option) => void controller.votePulse(pulseId, option)}
                   />
                 </ScrollView>

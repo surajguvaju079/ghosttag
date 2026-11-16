@@ -5,7 +5,7 @@ import { useSession } from "../auth/provider";
 import type { PlaygroundToday } from "../api/contracts";
 import { Text, styles } from "../ui/primitives";
 
-export function DailyTopic() {
+export function DailyTopic({ compact = false }: { compact?: boolean }) {
   const { api, token } = useSession();
   const [today, setToday] = useState<PlaygroundToday>();
   const day = useRef<string | undefined>(undefined);
@@ -24,6 +24,14 @@ export function DailyTopic() {
     return () => { active = false; clearInterval(timer); };
   }, [api, token]));
   if (!today) return null;
+  if (compact) {
+    return (
+      <View style={[styles.card, { gap: 4, padding: 14 }]}>
+        <Text style={styles.label}>TODAY&apos;S QUESTION</Text>
+        <Text style={{ fontSize: 16, fontWeight: "600" }}>{today.topic}</Text>
+      </View>
+    );
+  }
   return <View style={styles.card}>
     <Text style={styles.label}>TODAY&apos;S QUESTION</Text>
     <Text style={{ fontSize: 18, fontWeight: "600" }}>{today.topic}</Text>

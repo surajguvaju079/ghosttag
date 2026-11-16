@@ -1,5 +1,6 @@
 import { MatchingHomeEntry } from "../../matching/home-entry";
 import { DailyTopic } from "../../components/daily-topic";
+import { ReturningRoomCue } from "../../components/returning-room-cue";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -94,6 +95,7 @@ export default function Home() {
           <View style={home.hero}>
             <BrandMark />
           </View>
+          <ReturningRoomCue />
           <MatchingHomeEntry />
           <DailyTopic />
           <View style={home.card}>

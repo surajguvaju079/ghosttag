@@ -23,6 +23,19 @@ Daily prompts, story starters, and Pulses remain under collapsed Ideas. The
 old local-only Story relay, Word chain, and Three clues starters are no longer
 offered in the room. Games work in group and matched rooms.
 
+The room card shows a short status and the next action; song fields and recent
+turns open on demand so chat keeps its space. A live game is prominent in the
+Play menu, as is a live Pulse. The quick idea action previews one curated idea
+at a time; a separate action places the chosen text in the unsent composer for
+review. While the chat keyboard is open, the game card shows only its status
+and an action to reveal the controls after dismissing the keyboard.
+
+The room Play menu also offers a local three-step guide: place today's question
+in the composer, start or join the existing Rock, Paper, Scissors game, then
+start or view an existing curated Pulse. The guide only tracks this screen's
+progress and does not post a message automatically or store a score. Shared
+actions still use their existing authorized room endpoints and expiry rules.
+
 One game is active per room. Any active member may start one; the starter or
 room owner may end it. A room row lock serializes starts and actions. Game
 state and idempotency keys live in PostgreSQL and are deleted with the room.

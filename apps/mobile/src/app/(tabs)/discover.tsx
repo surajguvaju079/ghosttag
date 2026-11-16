@@ -121,7 +121,7 @@ export default function Discover() {
           Drop into a conversation that feels right. Rooms here are listed by
           their hosts.
         </Text>
-        <DailyTopic />
+        <DailyTopic compact />
         {loaded && visible.length > 0 && (
           <View style={{ gap: 12 }}>
             <Text style={styles.label}>FIND YOUR VIBE</Text>

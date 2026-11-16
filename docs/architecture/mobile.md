@@ -156,6 +156,10 @@ Previously left. The former starter Explore route redirects to My Rooms.
 
 My Rooms reads `GET /rooms` for the current credential. Current and previously
 left memberships appear in separate sections, with Open and Rejoin actions.
+Home uses the same authorized room list to show a dismissible return cue for one
+unexpired, unlocked active room. The cue claims only that the room is open;
+the room-list contract does not expose new-message activity. It sends no device
+notification and stores no room history or reminder preference.
 Locked rooms stay visible with entry disabled until unlock. Expired rooms disappear
 from the visible list. The list refreshes on focus, foreground and pull-to-refresh;
 errors preserve existing results and offer retry. Each controller belongs to one
@@ -185,8 +189,13 @@ same UTC topic, while both room kinds expose editable prompts and curated
 two-choice Pulses. The room controller refreshes Pulse snapshots after socket
 hints and reconnect; a playground request failure does not disable text chat.
 Room expiry and access invalidation clear Pulse state alongside messages.
-Home and Discover also preview the shared daily story. The room Playground groups
-Today, Activities and Pulses; choosing text appends it to the unsent draft. Matched
+Home and Discover also preview the shared daily story. The room Play menu leads
+with Rock, Paper, Scissors and Antakshari; a live game has a direct return action.
+A live Pulse appears in the main menu, while other Pulses and curated prompts
+remain under Ideas. A quick idea action cycles through the curated topic, story,
+and prompts for the current room screen, appending the selected text to the
+unsent draft. The inline game card keeps its waiting state compact and opens
+Antakshari's song fields only when the member chooses to add a song. Matched
 rooms show the temporary session's chosen topic, including after app restart.
 
 The Home join form can paste a validated room code after an explicit tap. Discover

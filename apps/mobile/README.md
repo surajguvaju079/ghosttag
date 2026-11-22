@@ -75,7 +75,10 @@ errors, pagination/recovery, deduplication, stable retry keys, and reports.
 AdMob is available only in a rebuilt native app, not Expo Go or the web preview.
 Android uses the configured GhostTag app ID. Development builds use Google's test
 banner and interstitial units; `EXPO_PUBLIC_APP_ENV=production` selects the owner’s
-Android units. Banners appear at the bottom of Home, Discover and My Rooms when
+Android units.
+Android declares the AD_ID permission for AdMob; confirm it in the built AAB and
+keep the Play advertising ID declaration and privacy/Data safety answers aligned.
+The banners appear at the bottom of Home, Discover and My Rooms when
 the tab is focused and the keyboard is hidden. The server-unavailable startup page
 offers a banner and voluntary interstitial after a local 18+ date check. Its ad
 button distinguishes privacy/setup failures, loading, and no-fill. After an ad

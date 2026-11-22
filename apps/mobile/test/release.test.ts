@@ -95,6 +95,16 @@ test("Expo production config fails closed and preserves owner/linkage/branding",
       ),
     );
     assert.ok(
+      result.android.permissions.includes(
+        "com.google.android.gms.permission.AD_ID",
+      ),
+    );
+    assert.ok(
+      !result.android.blockedPermissions.includes(
+        "com.google.android.gms.permission.AD_ID",
+      ),
+    );
+    assert.ok(
       result.plugins.some(
         (plugin: unknown) =>
           Array.isArray(plugin) && plugin[0] === "expo-audio",

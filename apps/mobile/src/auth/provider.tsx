@@ -8,13 +8,13 @@ import {
 } from "react";
 import { ApiClient, ApiError, configuration, friendlyError } from "../api/client";
 import { locallyAdult } from "../ads/offline-eligibility";
-import { VoluntaryAd } from "../ads/placements";
+import { OfflineAdBanner, VoluntaryAd } from "../ads/placements";
 import { browserPreview, credentialStore } from "./credential-store";
 import { AgeGate } from "./age-gate";
 import { Session } from "./session";
 import { Button, Text, styles } from "../ui/primitives";
 import { brand, BrandMark, BrandScreen } from "../ui/brand";
-import { ActivityIndicator, AppState, View } from "react-native";
+import { ActivityIndicator, AppState, ScrollView, View } from "react-native";
 
 function createRuntime() {
   try {
@@ -154,7 +154,18 @@ function OfflineGate({ session }: { session: Session }) {
     );
   return (
     <BrandScreen>
-      <View style={styles.center}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          justifyContent: "center",
+          padding: 28,
+          gap: 20,
+          width: "100%",
+          maxWidth: 560,
+          alignSelf: "center",
+        }}
+      >
         <BrandMark compact />
         <Text style={styles.title}>Couldn’t connect.</Text>
         <Text style={styles.muted}>
@@ -164,7 +175,8 @@ function OfflineGate({ session }: { session: Session }) {
         </Text>
         <Button label="Try again" onPress={retry} />
         {locallyEligible && <VoluntaryAd />}
-      </View>
+      </ScrollView>
+      {locallyEligible && <OfflineAdBanner />}
     </BrandScreen>
   );
 }

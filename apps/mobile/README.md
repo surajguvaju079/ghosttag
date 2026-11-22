@@ -77,8 +77,10 @@ Android uses the configured GhostTag app ID. Development builds use Google's tes
 banner and interstitial units; `EXPO_PUBLIC_APP_ENV=production` selects the owner’s
 Android units. Banners appear at the bottom of Home, Discover and My Rooms when
 the tab is focused and the keyboard is hidden. The server-unavailable startup page
-offers a voluntary interstitial only after a local 18+ date check. That check never
-unlocks social features. Ads still require an internet connection and inventory.
+offers a banner and voluntary interstitial after a local 18+ date check. Its ad
+button distinguishes privacy/setup failures, loading, and no-fill; retry is manual.
+The local date check never unlocks social features. Ads still require an internet
+connection and inventory.
 The Settings tab offers ad privacy choices. Configure AdMob Privacy & messaging,
 review the privacy policy and Play Data safety disclosure, and test on a native
 Android build before uploading. The iOS plugin ID is Google’s sample ID for local

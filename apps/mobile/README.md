@@ -78,7 +78,11 @@ banner and interstitial units; `EXPO_PUBLIC_APP_ENV=production` selects the owne
 Android units. Banners appear at the bottom of Home, Discover and My Rooms when
 the tab is focused and the keyboard is hidden. The server-unavailable startup page
 offers a banner and voluntary interstitial after a local 18+ date check. Its ad
-button distinguishes privacy/setup failures, loading, and no-fill; retry is manual.
+button distinguishes privacy/setup failures, loading, and no-fill. After an ad
+closes, the next ad is requested in the background; failed requests need a manual
+retry, and viewing any loaded ad still requires a tap.
+If a consent refresh fails, the SDK may use its own valid decision from the previous
+app session; without one, ad requests stay blocked and the native error is shown.
 The local date check never unlocks social features. Ads still require an internet
 connection and inventory.
 The Settings tab offers ad privacy choices. Configure AdMob Privacy & messaging,

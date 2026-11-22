@@ -6,12 +6,13 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import { ApiClient, ApiError, configuration, friendlyError } from "../api/client";
+import { ApiClient, configuration, friendlyError } from "../api/client";
 import { locallyAdult } from "../ads/offline-eligibility";
 import { OfflineAdBanner, VoluntaryAd } from "../ads/placements";
 import { browserPreview, credentialStore } from "./credential-store";
 import { AgeGate } from "./age-gate";
 import { Session } from "./session";
+import { canOfferOfflineAds } from "./offline-availability";
 import { Button, Text, styles } from "../ui/primitives";
 import { brand, BrandMark, BrandScreen } from "../ui/brand";
 import { ActivityIndicator, AppState, ScrollView, View } from "react-native";
@@ -83,12 +84,7 @@ function SessionGate({
     return (
       <AgeGate key={state.status} state={state} session={runtime.session} />
     );
-  if (
-    state.status === "error" &&
-    state.error instanceof ApiError &&
-    (state.error.failure.code === "NETWORK_ERROR" ||
-      state.error.failure.statusCode >= 500)
-  )
+  if (state.status === "error" && canOfferOfflineAds(state.error))
     return <OfflineGate session={runtime.session} />;
   if (state.status !== "ready" || !state.token)
     return (

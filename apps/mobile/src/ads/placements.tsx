@@ -23,7 +23,7 @@ type AdAvailability =
   | { status: "unsupported" }
   | { status: "ready" }
   | { status: "consent-unavailable" }
-  | { status: "consent-error"; code: string }
+  | { status: "consent-error"; code: string; detail: string }
   | { status: "sdk-error"; code: string };
 
 let preparation: Promise<AdAvailability> | undefined;
@@ -38,6 +38,11 @@ function errorCode(error: unknown) {
     : "unknown";
 }
 
+function errorDetail(error: unknown) {
+  const message = error instanceof Error ? error.message : "";
+  return message.replace(/https?:\/\/\S+/g, "[url]").replace(/\s+/g, " ").slice(0, 180);
+}
+
 function publish(availability: AdAvailability) {
   readinessListeners.forEach((listener) => listener(availability));
 }
@@ -48,7 +53,15 @@ function prepareAds() {
     try {
       canRequestAds = (await AdsConsent.gatherConsent()).canRequestAds;
     } catch (error) {
-      return { status: "consent-error", code: errorCode(error) } as const;
+      // UMP may retain a valid decision from a previous session after an update
+      // failure. Never proceed unless UMP itself says requests are allowed.
+      const cached = await AdsConsent.getConsentInfo().catch(() => null);
+      if (cached?.canRequestAds) canRequestAds = true;
+      else return {
+        status: "consent-error",
+        code: errorCode(error),
+        detail: errorDetail(error),
+      } as const;
     }
     if (!canRequestAds) return { status: "consent-unavailable" } as const;
     try {
@@ -121,8 +134,12 @@ export function VoluntaryAd() {
     adUnitId: Platform.OS === "android" ? interstitialUnit : null,
     autoLoad: ready,
   });
+  const { status: adStatus, load: loadAd } = ad;
+  useEffect(() => {
+    if (ready && adStatus === "closed") loadAd();
+  }, [ready, adStatus, loadAd]);
   const canRetrySetup = ["consent-unavailable", "consent-error", "sdk-error"].includes(availability.status);
-  const canRetryAd = ready && ["closed", "no-fill", "error"].includes(ad.status);
+  const canRetryAd = ready && ["no-fill", "error"].includes(ad.status);
   const label = canRetrySetup
     ? "Check ad availability again"
     : !ready
@@ -130,8 +147,8 @@ export function VoluntaryAd() {
       : ad.status === "loaded"
         ? "View optional ad"
         : canRetryAd
-          ? "Try loading an ad"
-          : ad.status === "loading"
+          ? "Retry ad request"
+          : ad.status === "loading" || ad.status === "closed"
             ? "Loading ad…"
             : "Ad unavailable right now";
   const detail = availability.status === "consent-unavailable"
@@ -139,7 +156,7 @@ export function VoluntaryAd() {
     : availability.status === "unsupported"
       ? "Optional ads are currently available on Android only."
     : availability.status === "consent-error"
-      ? `Ad privacy check failed (${availability.code}).`
+      ? `Ad privacy check failed (${availability.code}). ${availability.detail}`.trim()
       : availability.status === "sdk-error"
         ? `Ad setup failed (${availability.code}).`
         : ad.status === "no-fill"

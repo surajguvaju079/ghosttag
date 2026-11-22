@@ -1,9 +1,10 @@
 import { useCallback, useState } from "react";
-import { ScrollView, View } from "react-native";
+import { Platform, ScrollView, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { useSession } from "../../auth/provider";
 import { friendlyError } from "../../api/client";
 import Safety from "../../components/safety-content";
+import { openAdPrivacyOptions } from "../../ads/placements";
 import { Banner, Button, Screen, Text, styles } from "../../ui/primitives";
 
 export default function Settings() {
@@ -13,6 +14,7 @@ export default function Settings() {
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
+  const [adPrivacyError, setAdPrivacyError] = useState(false);
   useFocusEffect(
     useCallback(() => {
       let active = true;
@@ -64,6 +66,25 @@ export default function Settings() {
             onPress={() => setSafety(true)}
           />
         </View>
+        {Platform.OS === "android" && (
+          <View style={styles.card}>
+            <Text style={styles.label}>AD PRIVACY</Text>
+            <Text style={styles.muted}>
+              Review the choices available for ads on this device.
+            </Text>
+            {adPrivacyError && (
+              <Banner>Ad privacy choices are unavailable right now.</Banner>
+            )}
+            <Button
+              label="Ad privacy choices"
+              secondary
+              onPress={() => {
+                setAdPrivacyError(false);
+                void openAdPrivacyOptions().catch(() => setAdPrivacyError(true));
+              }}
+            />
+          </View>
+        )}
         <View style={styles.card}>
           <Text style={styles.label}>BLOCKED PEOPLE</Text>
           <Text>

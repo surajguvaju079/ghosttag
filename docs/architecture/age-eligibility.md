@@ -71,6 +71,11 @@ authorize every operation. Late responses from replaced identities or obsolete
 assessment/foreground requests cannot restore access. Old/malformed identity-status
 responses fail closed. Browser preview still loses its credential on reload.
 
+During a cold-start API outage on Android, the app can separately check a selected
+birthday locally to decide whether an optional ad may load. It discards that date
+after the check. The local result is never stored, sent to the API, or used for
+social authorization; room access remains gated on the server's eligibility result.
+
 ## Rollout
 
 Apply the migration and regenerate Prisma, deploy the backend with social access

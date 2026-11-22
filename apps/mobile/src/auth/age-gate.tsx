@@ -21,9 +21,13 @@ function maxBirthDay(year: number, month: number, today: Date) {
 export function AgeGate({
   state,
   session,
+  offlineCheck,
+  onRetry,
 }: {
   state: SessionState;
   session: Session;
+  offlineCheck?: (dateOfBirth: string) => void;
+  onRetry?: () => void;
 }) {
   const [year, setYear] = useState<number | null>(null);
   const [month, setMonth] = useState<number | null>(null);
@@ -105,9 +109,9 @@ export function AgeGate({
           {state.status === "screening" ? (
             <>
               <Text style={styles.muted}>
-                Select your birth date to check eligibility. We keep the
-                eligibility result, not your birthday. Your birthday is never
-                shown to other people.
+                {offlineCheck
+                  ? "The server is unavailable. Select your birth date to check locally whether optional ads may be shown. This does not unlock rooms or messages. Your birth date is discarded after the check."
+                  : "Select your birth date to check eligibility. We keep the eligibility result, not your birthday. Your birthday is never shown to other people."}
               </Text>
               <View style={{ flexDirection: "row", gap: 8 }}>
                 {(["year", "month", "day"] as const).map((part) => (
@@ -160,9 +164,15 @@ export function AgeGate({
                 disabled={!birthday || now < retryAt}
                 onPress={() => {
                   if (!birthday) return;
-                  void session.assessAge(birthday).finally(clearBirthday);
+                  if (offlineCheck) {
+                    offlineCheck(birthday);
+                    clearBirthday();
+                  } else void session.assessAge(birthday).finally(clearBirthday);
                 }}
               />
+              {onRetry && (
+                <Button label="Try connecting again" secondary onPress={onRetry} />
+              )}
             </>
           ) : (
             <>

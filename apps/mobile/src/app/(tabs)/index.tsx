@@ -1,5 +1,6 @@
 import { MatchingHomeEntry } from "../../matching/home-entry";
 import { DailyTopic } from "../../components/daily-topic";
+import { AdBanner } from "../../ads/placements";
 import { ReturningRoomCue } from "../../components/returning-room-cue";
 import { useState } from "react";
 import {
@@ -89,6 +90,7 @@ export default function Home() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView
+          style={{ flex: 1 }}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={home.content}
         >
@@ -327,6 +329,7 @@ export default function Home() {
             </Text>
           )}
         </ScrollView>
+        <AdBanner />
       </KeyboardAvoidingView>
     </BrandScreen>
   );

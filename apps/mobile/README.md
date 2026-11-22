@@ -72,6 +72,18 @@ errors, pagination/recovery, deduplication, stable retry keys, and reports.
 
 ## Manual device checklist
 
+AdMob is available only in a rebuilt native app, not Expo Go or the web preview.
+Android uses the configured GhostTag app ID. Development builds use Google's test
+banner and interstitial units; `EXPO_PUBLIC_APP_ENV=production` selects the owner’s
+Android units. Banners appear at the bottom of Home, Discover and My Rooms when
+the tab is focused and the keyboard is hidden. The server-unavailable startup page
+offers a voluntary interstitial only after a local 18+ date check. That check never
+unlocks social features. Ads still require an internet connection and inventory.
+The Settings tab offers ad privacy choices. Configure AdMob Privacy & messaging,
+review the privacy policy and Play Data safety disclosure, and test on a native
+Android build before uploading. The iOS plugin ID is Google’s sample ID for local
+builds only; obtain an owner-controlled iOS app ID before any iOS release.
+
 For voice messages, build a native binary containing `expo-audio`, then verify
 microphone permission on first tap, the original-voice warning, ten-second stop,
 local preview/discard, send/retry after an uncertain response, playback by another

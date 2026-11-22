@@ -13,6 +13,7 @@ import type { JoinedRoom } from "../../api/contracts";
 import { JoinedRoomsController, visibleRooms } from "../../rooms/joined-rooms";
 import { vibeLabel } from "../../rooms/vibes";
 import { RoomShare } from "../../components/room-share";
+import { AdBanner } from "../../ads/placements";
 import { Banner, Button, Screen, Text, styles } from "../../ui/primitives";
 
 export default function MyRooms() {
@@ -54,6 +55,7 @@ export default function MyRooms() {
   return (
     <Screen bottomInset={false}>
       <ScrollView
+        style={{ flex: 1 }}
         contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl
@@ -147,6 +149,7 @@ export default function MyRooms() {
           );
         })}
       </ScrollView>
+      <AdBanner />
     </Screen>
   );
 }

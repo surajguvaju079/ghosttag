@@ -15,9 +15,11 @@ Room TTL alone is not a basis to declare all processing ephemeral or no data col
 | Peer network information                                      | Limiter uses per-process keyed hashes; proxy may see raw IP       | Security/abuse prevention; deployment logging/location inference needs audit                             |
 | Operational diagnostics                                       | API route/status/duration/request UUID                            | Operations; actual hosting/Expo/Google diagnostics and retention pending                                 |
 | Microphone permission                                         | Requested only after a native user taps Record                    | Required for short room voice messages; verify final manifest and Play disclosure                         |
-| Contacts, camera, other media, precise location, ads ID       | Not used by the current app; release permission blocks added      | Verify final manifest and every SDK before declaring absent                                              |
+| Contacts, camera, other media, precise location               | Not used by the current app; release permission blocks added      | Verify final manifest and every SDK before declaring absent                                              |
+| AdMob banner and optional interstitial                         | Mobile Ads SDK is configured for Android; requests can transmit device/network and ad interaction data to Google | Review the actual SDK data disclosures, consent flow, Play Data safety answers and privacy policy before upload |
+| Advertising ID                                                 | Android AD_ID permission remains blocked                          | Confirm merged release manifest and limited-ID behavior; do not claim the Ads SDK collects nothing       |
 
-No advertising, analytics or payment SDK is configured in the app code reviewed.
+An advertising SDK is now configured. No payment SDK is configured.
 This does not prove that no SDK/service processes diagnostics or device information.
 Review Expo SDKs, EAS build/runtime distinction, Google Play services, hosting, DB,
 TLS termination, backups, and support tooling. No E2EE exists. Transport encryption
@@ -39,3 +41,7 @@ The result, declared assessment method, time and policy version are retained aga
 the internal anonymous identity, beyond room expiry. No verification documents or
 biometrics are added. Reassess Play declarations, policy notices, infrastructure-body
 logging and launch-country obligations before enabling social access.
+
+When the API is unavailable at startup, a separate local date check gates the
+optional ad. That date stays in form memory and is discarded after the check; it is
+not sent to AdMob or used to grant social access.

@@ -14,6 +14,7 @@ import { friendlyError } from "../../api/client";
 import type { DiscoverRoom, Vibe } from "../../api/contracts";
 import { vibeLabel, vibes } from "../../rooms/vibes";
 import { DailyTopic } from "../../components/daily-topic";
+import { AdBanner } from "../../ads/placements";
 import { Banner, Button, Screen, Text, styles } from "../../ui/primitives";
 import { brand } from "../../ui/brand";
 
@@ -102,6 +103,7 @@ export default function Discover() {
   return (
     <Screen bottomInset={false}>
       <ScrollView
+        style={{ flex: 1 }}
         contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl
@@ -240,6 +242,7 @@ export default function Discover() {
           />
         )}
       </ScrollView>
+      <AdBanner />
     </Screen>
   );
 }

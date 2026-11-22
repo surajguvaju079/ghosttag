@@ -6,7 +6,9 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import { ApiClient, configuration, friendlyError } from "../api/client";
+import { ApiClient, ApiError, configuration, friendlyError } from "../api/client";
+import { locallyAdult } from "../ads/offline-eligibility";
+import { VoluntaryAd } from "../ads/placements";
 import { browserPreview, credentialStore } from "./credential-store";
 import { AgeGate } from "./age-gate";
 import { Session } from "./session";
@@ -81,6 +83,13 @@ function SessionGate({
     return (
       <AgeGate key={state.status} state={state} session={runtime.session} />
     );
+  if (
+    state.status === "error" &&
+    state.error instanceof ApiError &&
+    (state.error.failure.code === "NETWORK_ERROR" ||
+      state.error.failure.statusCode >= 500)
+  )
+    return <OfflineGate session={runtime.session} />;
   if (state.status !== "ready" || !state.token)
     return (
       <BrandScreen>
@@ -128,5 +137,34 @@ function SessionGate({
     <Context.Provider value={{ ...runtime, token: state.token }}>
       {children}
     </Context.Provider>
+  );
+}
+
+function OfflineGate({ session }: { session: Session }) {
+  const [locallyEligible, setLocallyEligible] = useState<boolean | null>(null);
+  const retry = () => void session.bootstrap();
+  if (locallyEligible === null)
+    return (
+      <AgeGate
+        state={{ status: "screening" }}
+        session={session}
+        offlineCheck={(date) => setLocallyEligible(locallyAdult(date))}
+        onRetry={retry}
+      />
+    );
+  return (
+    <BrandScreen>
+      <View style={styles.center}>
+        <BrandMark compact />
+        <Text style={styles.title}>Couldn’t connect.</Text>
+        <Text style={styles.muted}>
+          {locallyEligible
+            ? "GhostTag’s rooms are temporarily unavailable. You can try again or choose to view an ad while you wait."
+            : "GhostTag is available to adults only. Rooms and ads are unavailable."}
+        </Text>
+        <Button label="Try again" onPress={retry} />
+        {locallyEligible && <VoluntaryAd />}
+      </View>
+    </BrandScreen>
   );
 }
